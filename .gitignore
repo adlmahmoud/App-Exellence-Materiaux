@@ -1,0 +1,11 @@
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+node_modules/
+build/
+frontend/dist/
+*.exe
+*.log
+.env
+kbis*
