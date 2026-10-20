@@ -64,6 +64,7 @@ type Facture struct {
 	ModeReglement            ModeReglement `json:"modeReglement"`
 	DateFacture              string        `json:"dateFacture"`
 	DateEcheance             string        `json:"dateEcheance"`
+	ConditionsReglement      string        `json:"conditionsReglement"`
 	EntrepriseDenomination   string        `json:"entrepriseDenomination"`
 	EntrepriseFormeJuridique string        `json:"entrepriseFormeJuridique"`
 	EntrepriseCapital        int64         `json:"entrepriseCapital"`
@@ -131,14 +132,17 @@ type SaisieLigneFacture struct {
 }
 
 type NouvelleFacture struct {
-	ClientID      *string              `json:"clientId"`
-	ClientNom     string               `json:"clientNom"`
-	ModeReglement ModeReglement        `json:"modeReglement"`
-	DateFacture   string               `json:"dateFacture"`
-	DateEcheance  string               `json:"dateEcheance"`
-	MontantRegle  int64                `json:"montantRegle"`
-	Notes         string               `json:"notes"`
-	Lignes        []SaisieLigneFacture `json:"lignes"`
+	ClientID            *string              `json:"clientId"`
+	ClientNom           string               `json:"clientNom"`
+	ClientAdresse       string               `json:"clientAdresse"`
+	ClientSirenSiret    string               `json:"clientSirenSiret"`
+	ModeReglement       ModeReglement        `json:"modeReglement"`
+	DateFacture         string               `json:"dateFacture"`
+	DateEcheance        string               `json:"dateEcheance"`
+	ConditionsReglement string               `json:"conditionsReglement"`
+	MontantRegle        int64                `json:"montantRegle"`
+	Notes               string               `json:"notes"`
+	Lignes              []SaisieLigneFacture `json:"lignes"`
 }
 
 type FiltreFactures struct {

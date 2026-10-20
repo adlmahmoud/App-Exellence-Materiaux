@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS parametres_entreprise (
     taux_tva_defaut INTEGER NOT NULL DEFAULT 2000,
     taux_tva_disponibles TEXT NOT NULL DEFAULT '[2000,1000,550,210,0]',
     mentions_legales TEXT NOT NULL DEFAULT '',
+    conditions_reglement TEXT NOT NULL DEFAULT '',
     format_numerotation_facture TEXT NOT NULL DEFAULT 'FAC-{YYYY}-{SEQ}',
     format_numerotation_bon TEXT NOT NULL DEFAULT 'BON-{TYPE}-{YYYY}-{SEQ}',
     updated_at TEXT NOT NULL
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS parametres_entreprise (
 INSERT INTO parametres_entreprise (
     id, denomination, forme_juridique, capital, adresse, code_postal, ville,
     siren, siret, rcs, numero_tva, telephone, email, site_web, logo_path,
-    devise, taux_tva_defaut, taux_tva_disponibles, mentions_legales,
+    devise, taux_tva_defaut, taux_tva_disponibles, mentions_legales, conditions_reglement,
     format_numerotation_facture, format_numerotation_bon, updated_at
 ) VALUES (
     '01DEFAULTCONFIG00000000000',
@@ -47,6 +48,7 @@ INSERT INTO parametres_entreprise (
     'EUR',
     2000,
     '[2000,1000,550,210,0]',
+    '',
     '',
     'FAC-{YYYY}-{SEQ}',
     'BON-{TYPE}-{YYYY}-{SEQ}',
@@ -152,6 +154,7 @@ CREATE TABLE IF NOT EXISTS factures (
     mode_reglement TEXT NOT NULL DEFAULT 'especes',
     date_facture TEXT NOT NULL,
     date_echeance TEXT NOT NULL DEFAULT '',
+    conditions_reglement TEXT NOT NULL DEFAULT '',
     entreprise_denomination TEXT NOT NULL,
     entreprise_forme_juridique TEXT NOT NULL DEFAULT '',
     entreprise_capital INTEGER NOT NULL DEFAULT 0,

@@ -22,6 +22,7 @@ type ParametresEntreprise struct {
 	TauxTVADefaut             int64     `json:"tauxTvaDefaut"`
 	TauxTVADisponibles        string    `json:"tauxTvaDisponibles"`
 	MentionsLegales           string    `json:"mentionsLegales"`
+	ConditionsReglement       string    `json:"conditionsReglement"`
 	FormatNumerotationFacture string    `json:"formatNumerotationFacture"`
 	FormatNumerotationBon     string    `json:"formatNumerotationBon"`
 	UpdatedAt                 time.Time `json:"updatedAt"`
@@ -46,6 +47,7 @@ type ModificationParametres struct {
 	TauxTVADefaut             int64  `json:"tauxTvaDefaut"`
 	TauxTVADisponibles        string `json:"tauxTvaDisponibles"`
 	MentionsLegales           string `json:"mentionsLegales"`
+	ConditionsReglement       string `json:"conditionsReglement"`
 	FormatNumerotationFacture string `json:"formatNumerotationFacture"`
 	FormatNumerotationBon     string `json:"formatNumerotationBon"`
 }

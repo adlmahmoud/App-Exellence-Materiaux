@@ -1,0 +1,16 @@
+{
+  "denomination": "Exellence Materiaux",
+  "formeJuridique": "SARL",
+  "capital": 1000000,
+  "adresse": "1 Rue Exemple",
+  "codePostal": "75000",
+  "ville": "Paris",
+  "siren": "000 000 000",
+  "siret": "000 000 000 00000",
+  "rcs": "Paris",
+  "numeroTva": "FR00 000000000",
+  "telephone": "0100000000",
+  "email": "contact@exemple.fr",
+  "siteWeb": "www.exemple.fr",
+  "devise": "EUR"
+}
