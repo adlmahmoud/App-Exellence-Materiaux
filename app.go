@@ -8,12 +8,14 @@ import (
 
 	"exellence-materiaux/internal/db"
 	"exellence-materiaux/internal/parametres"
+	"exellence-materiaux/internal/produits"
 )
 
 type App struct {
-	ctx        context.Context
-	database   *db.DB
-	projectDir string
+	ctx           context.Context
+	database      *db.DB
+	projectDir    string
+	produitsStore *produits.Store
 }
 
 func getProjectDir() string {
@@ -42,6 +44,7 @@ func NewApp() *App {
 	database, err := db.Open(dbPath)
 	if err == nil {
 		a.database = database
+		a.produitsStore = produits.NewStore(database.DB)
 	} else {
 		println(fmt.Sprintf("database open error: %v", err))
 	}
@@ -70,7 +73,7 @@ func (a *App) GetAPropos() map[string]string {
 func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
 	var p parametres.ParametresEntreprise
 	if a.database == nil {
-		return p, fmt.Errorf("database not initialized")
+		return p, fmt.Errorf("base de données non initialisée")
 	}
 
 	query := `SELECT id, denomination, forme_juridique, capital, adresse, code_postal, ville,
@@ -87,7 +90,7 @@ func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
 		&p.FormatNumerotationFacture, &p.FormatNumerotationBon, &updatedAtStr,
 	)
 	if err != nil {
-		return p, fmt.Errorf("get parametres: %w", err)
+		return p, fmt.Errorf("recuperation parametres: %w", err)
 	}
 
 	return p, nil
@@ -95,7 +98,7 @@ func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
 
 func (a *App) SauvegarderBase(dossierDestination string) (string, error) {
 	if a.database == nil {
-		return "", fmt.Errorf("database not initialized")
+		return "", fmt.Errorf("base de données non initialisée")
 	}
 
 	targetDir := dossierDestination
@@ -105,8 +108,43 @@ func (a *App) SauvegarderBase(dossierDestination string) (string, error) {
 
 	destPath := filepath.Join(targetDir, "exellence_backup.db")
 	if err := a.database.Backup(destPath); err != nil {
-		return "", fmt.Errorf("backup database: %w", err)
+		return "", fmt.Errorf("sauvegarde base: %w", err)
 	}
 
 	return destPath, nil
+}
+
+func (a *App) CreerProduit(input produits.NouveauProduit) (produits.Produit, error) {
+	if a.produitsStore == nil {
+		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
+	}
+	return a.produitsStore.Create(input)
+}
+
+func (a *App) ModifierProduit(input produits.ModificationProduit) (produits.Produit, error) {
+	if a.produitsStore == nil {
+		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
+	}
+	return a.produitsStore.Update(input)
+}
+
+func (a *App) SupprimerProduit(id string) error {
+	if a.produitsStore == nil {
+		return fmt.Errorf("base de données non initialisée")
+	}
+	return a.produitsStore.Delete(id)
+}
+
+func (a *App) GetProduitParCodeBarres(codeBarres string) (produits.Produit, error) {
+	if a.produitsStore == nil {
+		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
+	}
+	return a.produitsStore.GetByCodeBarres(codeBarres)
+}
+
+func (a *App) ListerProduits(filtre produits.FiltreProduits) (produits.PageProduits, error) {
+	if a.produitsStore == nil {
+		return produits.PageProduits{}, fmt.Errorf("base de données non initialisée")
+	}
+	return a.produitsStore.List(filtre)
 }
