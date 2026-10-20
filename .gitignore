@@ -10,3 +10,4 @@ frontend/dist/
 .env
 kbis*
 *.md5
+*.pdf
