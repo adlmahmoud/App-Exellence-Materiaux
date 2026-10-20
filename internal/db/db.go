@@ -54,7 +54,7 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 
-	dbInstance.importKbisIfPresent()
+	dbInstance.importKbisIfPresent(filepath.Dir(dbPath))
 
 	return dbInstance, nil
 }
@@ -130,8 +130,9 @@ func (d *DB) Migrate() error {
 	return nil
 }
 
-func (d *DB) importKbisIfPresent() {
-	content, err := os.ReadFile("kbis.json")
+func (d *DB) importKbisIfPresent(baseDir string) {
+	kbisPath := filepath.Join(baseDir, "kbis.json")
+	content, err := os.ReadFile(kbisPath)
 	if err != nil {
 		return
 	}
