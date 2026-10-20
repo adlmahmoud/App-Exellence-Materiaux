@@ -9,3 +9,4 @@ frontend/dist/
 *.log
 .env
 kbis*
+*.md5
