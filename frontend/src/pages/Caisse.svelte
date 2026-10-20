@@ -1,10 +1,21 @@
 <script>
-  import { GetProduitParCodeBarres } from '../../wailsjs/go/main/App.js';
+  import {
+    GetProduitParCodeBarres,
+    CreerFacture,
+    ImprimerFacturePDF,
+    CreerBon,
+    ImprimerBonPDF
+  } from '../../wailsjs/go/main/App.js';
 
   let codeBarresSaisi = '';
   let panier = [];
   let messageErreur = '';
+  let messageSucces = '';
   let inputScanElement;
+
+  let clientNom = 'Client Comptoir';
+  let modeReglement = 'especes';
+  let chargementPaiement = false;
 
   $: totalHT = panier.reduce((acc, item) => acc + (item.prixVenteHt * item.quantite), 0);
   $: totalTTC = panier.reduce((acc, item) => acc + (item.prixVenteTtc * item.quantite), 0);
@@ -15,6 +26,7 @@
       const code = codeBarresSaisi.trim();
       if (!code) return;
       messageErreur = '';
+      messageSucces = '';
 
       try {
         const prod = await GetProduitParCodeBarres(code);
@@ -66,6 +78,83 @@
   function viderPanier() {
     panier = [];
     messageErreur = '';
+    messageSucces = '';
+  }
+
+  async function validerEtFacturer() {
+    if (panier.length === 0) return;
+    chargementPaiement = true;
+    messageErreur = '';
+    messageSucces = '';
+
+    try {
+      const lignes = panier.map(item => ({
+        produitId: item.id,
+        codeBarres: item.codeBarres || '',
+        reference: item.reference || '',
+        designation: item.designation,
+        quantite: Math.round(Number(item.quantite)),
+        prixUnitaireHt: item.prixVenteHt,
+        tauxTva: item.tauxTva
+      }));
+
+      const res = await CreerFacture({
+        clientNom: clientNom.trim() || 'Client Comptoir',
+        modeReglement: modeReglement,
+        lignes: lignes
+      });
+
+      messageSucces = `Encaissement réussi ! Facture ${res.facture.numero} générée et ouverte en PDF.`;
+      panier = [];
+
+      try {
+        await ImprimerFacturePDF(res.facture.id);
+      } catch (errPdf) {}
+
+      if (inputScanElement) inputScanElement.focus();
+    } catch (err) {
+      messageErreur = 'Erreur lors de la validation : ' + err;
+    } finally {
+      chargementPaiement = false;
+    }
+  }
+
+  async function validerEtBonLivraison() {
+    if (panier.length === 0) return;
+    chargementPaiement = true;
+    messageErreur = '';
+    messageSucces = '';
+
+    try {
+      const lignes = panier.map(item => ({
+        produitId: item.id,
+        codeBarres: item.codeBarres || '',
+        reference: item.reference || '',
+        designation: item.designation,
+        quantite: Math.round(Number(item.quantite)),
+        prixUnitaireHt: item.prixVenteHt,
+        tauxTva: item.tauxTva
+      }));
+
+      const res = await CreerBon({
+        typeBon: 'livraison',
+        clientNom: clientNom.trim() || 'Client Chantier',
+        lignes: lignes
+      });
+
+      messageSucces = `Bon de livraison ${res.bon.numero} généré et ouvert en PDF.`;
+      panier = [];
+
+      try {
+        await ImprimerBonPDF(res.bon.id);
+      } catch (errPdf) {}
+
+      if (inputScanElement) inputScanElement.focus();
+    } catch (err) {
+      messageErreur = 'Erreur lors de la création du bon : ' + err;
+    } finally {
+      chargementPaiement = false;
+    }
   }
 </script>
 
@@ -86,6 +175,9 @@
     </div>
   </div>
 
+  {#if messageSucces}
+    <div class="alert success">{messageSucces}</div>
+  {/if}
   {#if messageErreur}
     <div class="alert error">{messageErreur}</div>
   {/if}
@@ -148,6 +240,12 @@
 
     <div class="reglement-card">
       <h2>Détail du Règlement</h2>
+
+      <div class="client-box">
+        <label>Client :</label>
+        <input type="text" bind:value={clientNom} placeholder="Nom du client" />
+      </div>
+
       <div class="recap-lines">
         <div class="recap-line">
           <span>Sous-total HT :</span>
@@ -167,14 +265,47 @@
       <div class="mode-reglement">
         <label>Mode de paiement :</label>
         <div class="btn-group">
-          <button class="btn btn-pay active">Espèces</button>
-          <button class="btn btn-pay">Carte Bancaire</button>
-          <button class="btn btn-pay">Virement</button>
+          <button
+            class="btn btn-pay {modeReglement === 'especes' ? 'active' : ''}"
+            on:click={() => modeReglement = 'especes'}
+          >
+            Espèces
+          </button>
+          <button
+            class="btn btn-pay {modeReglement === 'cb' ? 'active' : ''}"
+            on:click={() => modeReglement = 'cb'}
+          >
+            Carte Bancaire
+          </button>
+          <button
+            class="btn btn-pay {modeReglement === 'virement' ? 'active' : ''}"
+            on:click={() => modeReglement = 'virement'}
+          >
+            Virement
+          </button>
+          <button
+            class="btn btn-pay {modeReglement === 'cheque' ? 'active' : ''}"
+            on:click={() => modeReglement = 'cheque'}
+          >
+            Chèque
+          </button>
         </div>
       </div>
 
-      <button class="btn-valider" disabled={panier.length === 0}>
-        Valider l'encaissement & Facturer
+      <button
+        class="btn-valider"
+        disabled={panier.length === 0 || chargementPaiement}
+        on:click={validerEtFacturer}
+      >
+        {chargementPaiement ? 'Validation en cours...' : 'Valider l\'encaissement & Facturer (PDF)'}
+      </button>
+
+      <button
+        class="btn-bon"
+        disabled={panier.length === 0 || chargementPaiement}
+        on:click={validerEtBonLivraison}
+      >
+        Générer Bon de livraison
       </button>
     </div>
   </div>
@@ -220,18 +351,19 @@
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
   .panier-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 16px;
     border-bottom: 1px solid #f1f5f9;
     padding-bottom: 12px;
-    margin-bottom: 16px;
   }
-  .panier-header h2, .reglement-card h2 {
+  .panier-header h2 {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.2rem;
     color: #1e293b;
   }
   .btn-vider {
@@ -240,35 +372,124 @@
     border: 1px solid #fca5a5;
     padding: 4px 10px;
     border-radius: 4px;
-    cursor: pointer;
     font-size: 0.8rem;
-  }
-  .btn-vider:hover {
-    background: #fee2e2;
+    font-weight: 600;
+    cursor: pointer;
   }
   .empty-state {
     text-align: center;
-    padding: 80px 20px;
-    color: #94a3b8;
+    padding: 60px 20px;
+    color: #64748b;
   }
   .empty-icon {
     font-size: 3rem;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+  }
+  .empty-state p {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: #1e293b;
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .table th, .table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    font-size: 0.95rem;
+  }
+  .table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .text-center {
+    text-align: center;
+  }
+  .text-right {
+    text-align: right;
+  }
+  .text-muted {
+    color: #94a3b8;
+  }
+  .qty-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 2px 4px;
+  }
+  .btn-qty {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.9rem;
+  }
+  .qty-val {
+    font-weight: 700;
+    min-width: 20px;
+    text-align: center;
+  }
+  .btn-remove {
+    background: transparent;
+    border: none;
+    color: #ef4444;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+  .reglement-card h2 {
+    margin: 0 0 16px;
+    font-size: 1.2rem;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+  }
+  .client-box {
+    margin-bottom: 16px;
+  }
+  .client-box label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 4px;
+  }
+  .client-box input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
   }
   .recap-lines {
     margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
   .recap-line {
     display: flex;
     justify-content: space-between;
-    padding: 6px 0;
-    color: #475569;
     font-size: 0.95rem;
+    color: #475569;
   }
   .total-box {
     background: #0f172a;
     color: white;
-    padding: 20px;
+    padding: 16px;
     border-radius: 8px;
     display: flex;
     justify-content: space-between;
@@ -278,9 +499,10 @@
   .total-label {
     font-size: 1rem;
     font-weight: 600;
+    color: #94a3b8;
   }
   .total-val {
-    font-size: 2rem;
+    font-size: 1.6rem;
     font-weight: 800;
     color: #38bdf8;
   }
@@ -292,22 +514,23 @@
     font-size: 0.85rem;
     font-weight: 600;
     color: #475569;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   .btn-group {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
   .btn-pay {
-    padding: 10px 6px;
-    border: 1px solid #cbd5e1;
     background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    padding: 10px;
     border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
     font-size: 0.85rem;
-    color: #334155;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
   }
   .btn-pay.active {
     background: #0284c7;
@@ -316,76 +539,49 @@
   }
   .btn-valider {
     width: 100%;
-    padding: 14px;
     background: #16a34a;
     color: white;
     border: none;
+    padding: 14px;
     border-radius: 8px;
-    font-size: 1.1rem;
-    font-weight: bold;
+    font-size: 1rem;
+    font-weight: 700;
     cursor: pointer;
+    margin-bottom: 10px;
+    transition: background 0.15s;
   }
   .btn-valider:hover:not(:disabled) {
     background: #15803d;
   }
   .btn-valider:disabled {
-    background: #cbd5e1;
+    opacity: 0.5;
     cursor: not-allowed;
   }
-  .table {
+  .btn-bon {
     width: 100%;
-    border-collapse: collapse;
-  }
-  .table th, .table td {
-    padding: 12px 10px;
-    border-bottom: 1px solid #f1f5f9;
-    text-align: left;
-    font-size: 0.95rem;
-  }
-  .table th {
-    background: #f8fafc;
-    color: #64748b;
-    font-size: 0.85rem;
-  }
-  .text-center { text-align: center; }
-  .text-right { text-align: right; }
-  .text-muted { color: #94a3b8; font-size: 0.8rem; }
-  .qty-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #f1f5f9;
-    border-radius: 6px;
-    padding: 2px 6px;
-  }
-  .btn-qty {
-    background: white;
-    border: 1px solid #cbd5e1;
-    width: 26px;
-    height: 26px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-  }
-  .qty-val {
-    font-weight: 700;
-    min-width: 20px;
-  }
-  .btn-remove {
-    background: transparent;
+    background: #475569;
+    color: white;
     border: none;
-    color: #94a3b8;
-    font-size: 1.4rem;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
     cursor: pointer;
   }
-  .btn-remove:hover {
-    color: #dc2626;
+  .btn-bon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   .alert {
     padding: 12px 16px;
     border-radius: 6px;
     margin-bottom: 16px;
     font-weight: 500;
+  }
+  .alert.success {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
   }
   .alert.error {
     background: #fef2f2;

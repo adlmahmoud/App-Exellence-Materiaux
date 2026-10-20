@@ -156,16 +156,16 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 14px;
-    background: transparent;
+    padding: 12px 16px;
     border: none;
-    border-radius: 8px;
-    color: #94a3b8;
+    background: transparent;
+    color: #cbd5e1;
     font-size: 0.95rem;
     font-weight: 500;
+    border-radius: 8px;
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s ease;
+    transition: background 0.15s, color 0.15s;
   }
   .nav-item:hover {
     background: #1e293b;
@@ -176,31 +176,35 @@
     color: #ffffff;
     font-weight: 600;
   }
-  .icon {
-    font-size: 1.15rem;
+  .nav-item .icon {
+    font-size: 1.2rem;
   }
   .sidebar-footer {
-    padding: 16px 12px;
+    padding: 16px;
     border-top: 1px solid #1e293b;
   }
   .btn-apropos {
     width: 100%;
     padding: 10px 14px;
-    background: transparent;
+    background: #1e293b;
     border: 1px solid #334155;
-    color: #94a3b8;
+    color: #cbd5e1;
+    font-size: 0.85rem;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.85rem;
-    text-align: center;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s, color 0.15s;
   }
   .btn-apropos:hover {
-    background: #1e293b;
+    background: #334155;
     color: #ffffff;
   }
   .main-content {
     flex: 1;
     overflow-y: auto;
-    background: #f8fafc;
+    background-color: #f8fafc;
   }
 </style>
