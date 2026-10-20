@@ -27,6 +27,9 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
+		Debug: options.Debug{
+			OpenInspectorOnStartup: false,
+		},
 		Windows: &windows.Options{
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
