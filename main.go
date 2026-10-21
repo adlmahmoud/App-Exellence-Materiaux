@@ -16,7 +16,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Exellence Materiaux",
+		Title:  "Gestion de Stock",
 		Width:  1280,
 		Height: 800,
 		AssetServer: &assetserver.Options{

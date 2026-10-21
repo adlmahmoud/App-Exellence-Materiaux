@@ -70,7 +70,7 @@ func (a *App) shutdown(ctx context.Context) {
 
 func (a *App) GetAPropos() map[string]string {
 	return map[string]string{
-		"nom":     "Exellence Materiaux",
+		"nom":     "Gestion de Stock",
 		"version": "1.0.0",
 		"annee":   "2026",
 		"auteurs": "Adel Mahmoud et Sidou",

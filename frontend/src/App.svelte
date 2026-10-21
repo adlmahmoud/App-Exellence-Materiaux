@@ -1,4 +1,5 @@
 <script>
+  import logo from './assets/images/gestion-stock.png';
   import Caisse from './pages/Caisse.svelte';
   import Produits from './pages/Produits.svelte';
   import Stock from './pages/Stock.svelte';
@@ -17,10 +18,10 @@
 <div class="app-layout">
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo-box">EM</div>
+      <img class="brand-logo" src={logo} alt="Logo Gestion de Stock" />
       <div class="brand-text">
-        <span class="brand-title">Exellence</span>
-        <span class="brand-sub">Matériaux</span>
+        <span class="brand-title">Gestion</span>
+        <span class="brand-sub">de Stock</span>
       </div>
     </div>
 
@@ -119,17 +120,11 @@
     padding: 24px 20px;
     border-bottom: 1px solid #1e293b;
   }
-  .logo-box {
-    width: 40px;
-    height: 40px;
-    background: #0284c7;
-    color: white;
-    font-weight: 800;
-    font-size: 1.1rem;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .brand-logo {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    object-fit: contain;
   }
   .brand-text {
     display: flex;

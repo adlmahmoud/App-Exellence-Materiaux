@@ -1,6 +1,6 @@
-# Exellence Matériaux
+# Gestion de Stock
 
-Logiciel de bureau tout-en-un : Caisse & scan rapide, gestion des stocks, facturation et bons de livraison pour **Exellence Matériaux**.  
+Logiciel de bureau tout-en-un : Caisse & scan rapide, gestion des stocks, facturation et bons de livraison.  
 Conçu et développé par **Adel Mahmoud et Sidou**.
 
 ---
@@ -22,13 +22,13 @@ Le logiciel est **déjà compilé et 100% prêt à l'emploi**.
 ## 🚀 Installation & Lancement en 2 étapes
 
 ### 1. Extraire le dossier
-Si vous avez reçu l'archive **`Exellence-Materiaux-Complet.zip`** :
+Si vous avez reçu l'archive **`Gestion-de-Stock-Complet.zip`** :
 1. Faites un **Clic droit** sur le fichier ZIP.
 2. Cliquez sur **« Extraire tout... »** puis validez (par exemple sur votre **Bureau**).
 > ⚠️ **Important** : Ne lancez pas le logiciel directement depuis le fichier ZIP sans l'extraire !
 
 ### 2. Démarrer le logiciel
-- Ouvrez le dossier extrait et double-cliquez directement sur **`Exellence-Materiaux.exe`** (ou sur **`lancer.bat`**).
+- Ouvrez le dossier extrait et double-cliquez directement sur **`Gestion-de-Stock.exe`** (ou sur **`lancer.bat`**).
 - Le logiciel s'ouvre directement à l'écran !
 
 ---
@@ -43,7 +43,7 @@ Pour l'ouvrir en 2 clics :
 2. Cliquez sur le bouton **« Exécuter quand même »** qui apparaît.  
 *(L'application se lance et ne vous le redemandera plus).*
 
-*Astuce alternative :* Clic droit sur `Exellence-Materiaux.exe` ➔ **Propriétés** ➔ tout en bas, cochez la case **« Débloquer »** ➔ **Appliquer** ➔ **OK**.
+*Astuce alternative :* Clic droit sur `Gestion-de-Stock.exe` ➔ **Propriétés** ➔ tout en bas, cochez la case **« Débloquer »** ➔ **Appliquer** ➔ **OK**.
 
 ---
 

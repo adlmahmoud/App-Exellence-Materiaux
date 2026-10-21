@@ -137,71 +137,6 @@ func (s *Store) CreerFacture(input NouvelleFacture) (DetailFacture, error) {
 		totalHT += montantHT
 		totalTVA += montantTVA
 		totalTTC += montantTTC
-
-		ligneID := uuid.NewString()
-
-		ligneQuery := `INSERT INTO lignes_facture (
-			id, facture_id, produit_id, code_barres, reference, designation,
-			quantite, prix_unitaire_ht, taux_tva, montant_ht, montant_tva, montant_ttc,
-			ordre, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-		_, err = tx.Exec(ligneQuery,
-			ligneID,
-			factureID,
-			l.ProduitID,
-			strings.TrimSpace(l.CodeBarres),
-			strings.TrimSpace(l.Reference),
-			strings.TrimSpace(l.Designation),
-			l.Quantite,
-			l.PrixUnitaireHT,
-			l.TauxTVA,
-			montantHT,
-			montantTVA,
-			montantTTC,
-			i,
-			nowStr,
-			nowStr,
-		)
-		if err != nil {
-			tx.Rollback()
-			return detail, fmt.Errorf("insert ligne facture %d: %w", i+1, err)
-		}
-
-		if l.ProduitID != nil && *l.ProduitID != "" {
-			var stockActuel int64
-			err := tx.QueryRow("SELECT stock_actuel FROM produits WHERE id = ?", *l.ProduitID).Scan(&stockActuel)
-			if err == nil {
-				nouveauStock := stockActuel - l.Quantite
-				_, _ = tx.Exec("UPDATE produits SET stock_actuel = ?, updated_at = ? WHERE id = ?", nouveauStock, nowStr, *l.ProduitID)
-
-				mvtID := uuid.NewString()
-				mvtSQL := `INSERT INTO mouvements_stock (
-					id, produit_id, type_mouvement, quantite, stock_avant, stock_apres,
-					prix_unitaire_ht, reference_document, motif, created_at, updated_at
-				) VALUES (?, ?, 'vente', ?, ?, ?, ?, ?, 'Vente facture', ?, ?)`
-
-				_, _ = tx.Exec(mvtSQL, mvtID, *l.ProduitID, l.Quantite, stockActuel, nouveauStock, l.PrixUnitaireHT, numeroFacture, nowStr, nowStr)
-			}
-		}
-
-		lignesInserees = append(lignesInserees, LigneFacture{
-			ID:             ligneID,
-			FactureID:      factureID,
-			ProduitID:      l.ProduitID,
-			CodeBarres:     l.CodeBarres,
-			Reference:      l.Reference,
-			Designation:    l.Designation,
-			Quantite:       l.Quantite,
-			PrixUnitaireHT: l.PrixUnitaireHT,
-			TauxTVA:        l.TauxTVA,
-			MontantHT:      montantHT,
-			MontantTVA:     montantTVA,
-			MontantTTC:     montantTTC,
-			Ordre:          i,
-			CreatedAt:      now,
-			UpdatedAt:      now,
-		})
 	}
 
 	modeReg := input.ModeReglement
@@ -277,6 +212,76 @@ func (s *Store) CreerFacture(input NouvelleFacture) (DetailFacture, error) {
 	if err != nil {
 		tx.Rollback()
 		return detail, fmt.Errorf("insert facture: %w", err)
+	}
+
+	ligneQuery := `INSERT INTO lignes_facture (
+		id, facture_id, produit_id, code_barres, reference, designation,
+		quantite, prix_unitaire_ht, taux_tva, montant_ht, montant_tva, montant_ttc,
+		ordre, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for i, l := range input.Lignes {
+		montantHT := l.PrixUnitaireHT * l.Quantite
+		montantTVA := (montantHT * l.TauxTVA) / 10000
+		montantTTC := montantHT + montantTVA
+		ligneID := uuid.NewString()
+
+		_, err = tx.Exec(ligneQuery,
+			ligneID,
+			factureID,
+			l.ProduitID,
+			strings.TrimSpace(l.CodeBarres),
+			strings.TrimSpace(l.Reference),
+			strings.TrimSpace(l.Designation),
+			l.Quantite,
+			l.PrixUnitaireHT,
+			l.TauxTVA,
+			montantHT,
+			montantTVA,
+			montantTTC,
+			i,
+			nowStr,
+			nowStr,
+		)
+		if err != nil {
+			tx.Rollback()
+			return detail, fmt.Errorf("insert ligne facture %d: %w", i+1, err)
+		}
+
+		if l.ProduitID != nil && *l.ProduitID != "" {
+			var stockActuel int64
+			err := tx.QueryRow("SELECT stock_actuel FROM produits WHERE id = ?", *l.ProduitID).Scan(&stockActuel)
+			if err == nil {
+				nouveauStock := stockActuel - l.Quantite
+				_, _ = tx.Exec("UPDATE produits SET stock_actuel = ?, updated_at = ? WHERE id = ?", nouveauStock, nowStr, *l.ProduitID)
+
+				mvtID := uuid.NewString()
+				mvtSQL := `INSERT INTO mouvements_stock (
+					id, produit_id, type_mouvement, quantite, stock_avant, stock_apres,
+					prix_unitaire_ht, reference_document, motif, created_at, updated_at
+				) VALUES (?, ?, 'vente', ?, ?, ?, ?, ?, 'Vente facture', ?, ?)`
+
+				_, _ = tx.Exec(mvtSQL, mvtID, *l.ProduitID, l.Quantite, stockActuel, nouveauStock, l.PrixUnitaireHT, numeroFacture, nowStr, nowStr)
+			}
+		}
+
+		lignesInserees = append(lignesInserees, LigneFacture{
+			ID:             ligneID,
+			FactureID:      factureID,
+			ProduitID:      l.ProduitID,
+			CodeBarres:     l.CodeBarres,
+			Reference:      l.Reference,
+			Designation:    l.Designation,
+			Quantite:       l.Quantite,
+			PrixUnitaireHT: l.PrixUnitaireHT,
+			TauxTVA:        l.TauxTVA,
+			MontantHT:      montantHT,
+			MontantTVA:     montantTVA,
+			MontantTTC:     montantTTC,
+			Ordre:          i,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		})
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -502,12 +507,36 @@ func (s *Store) CreerBon(input NouveauBon) (DetailBon, error) {
 		totalTVA += montantTVA
 		totalTTC += montantTTC
 
+	}
+
+	bonQuery := `INSERT INTO bons (
+		id, type_bon, numero, sequence_numero, statut, date_bon, reference_externe,
+		entreprise_denomination, entreprise_adresse, entreprise_telephone, entreprise_email,
+		client_id, client_nom, total_ht, total_tva, total_ttc, notes, created_at, updated_at
+	) VALUES (?, ?, ?, ?, 'en_cours', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = tx.Exec(bonQuery,
+		bonID, string(typeBon), numeroBon, seqNumero, dateBon, input.ReferenceExterne,
+		paramDenom, paramAdresse, paramTel, paramEmail,
+		input.ClientID, clientNom, totalHT, totalTVA, totalTTC, input.Notes,
+		nowStr, nowStr,
+	)
+	if err != nil {
+		tx.Rollback()
+		return detail, fmt.Errorf("insert bon: %w", err)
+	}
+
+	ligneQuery := `INSERT INTO lignes_bon (
+		id, bon_id, produit_id, code_barres, reference, designation,
+		quantite, prix_unitaire_ht, taux_tva, montant_ht, montant_tva, montant_ttc, ordre,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for i, l := range input.Lignes {
+		montantHT := l.PrixUnitaireHT * l.Quantite
+		montantTVA := (montantHT * l.TauxTVA) / 10000
+		montantTTC := montantHT + montantTVA
 		ligneID := uuid.NewString()
-		ligneQuery := `INSERT INTO lignes_bon (
-			id, bon_id, produit_id, code_barres, reference, designation,
-			quantite, prix_unitaire_ht, taux_tva, montant_ht, montant_tva, montant_ttc, ordre,
-			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 		_, err = tx.Exec(ligneQuery,
 			ligneID, bonID, l.ProduitID, l.CodeBarres, l.Reference, l.Designation,
@@ -536,23 +565,6 @@ func (s *Store) CreerBon(input NouveauBon) (DetailBon, error) {
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		})
-	}
-
-	bonQuery := `INSERT INTO bons (
-		id, type_bon, numero, sequence_numero, statut, date_bon, reference_externe,
-		entreprise_denomination, entreprise_adresse, entreprise_telephone, entreprise_email,
-		client_id, client_nom, total_ht, total_tva, total_ttc, notes, created_at, updated_at
-	) VALUES (?, ?, ?, ?, 'en_cours', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-
-	_, err = tx.Exec(bonQuery,
-		bonID, string(typeBon), numeroBon, seqNumero, dateBon, input.ReferenceExterne,
-		paramDenom, paramAdresse, paramTel, paramEmail,
-		input.ClientID, clientNom, totalHT, totalTVA, totalTTC, input.Notes,
-		nowStr, nowStr,
-	)
-	if err != nil {
-		tx.Rollback()
-		return detail, fmt.Errorf("insert bon: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {

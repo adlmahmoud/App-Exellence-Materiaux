@@ -1,30 +1,30 @@
 @echo off
-title Exellence Materiaux
+title Gestion de Stock
 chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ===================================================
-echo           Lancement d'Exellence Materiaux
+echo           Lancement de Gestion de Stock
 echo ===================================================
 echo.
 
-if exist "Exellence-Materiaux.exe" (
+if exist "Gestion-de-Stock.exe" (
     echo Demarrage de l'application...
-    start "" "Exellence-Materiaux.exe"
+    start "" "Gestion-de-Stock.exe"
     exit /b 0
 )
 
-if exist "build\bin\exellence-materiaux.exe" (
+if exist "build\bin\Gestion-de-Stock.exe" (
     echo Demarrage de l'application...
-    start "" "build\bin\exellence-materiaux.exe"
+    start "" "build\bin\Gestion-de-Stock.exe"
     exit /b 0
 )
 
 echo Compilation initiale de l'application avec Wails...
 wails build
-if exist "build\bin\exellence-materiaux.exe" (
-    copy "build\bin\exellence-materiaux.exe" "Exellence-Materiaux.exe" >nul
-    start "" "Exellence-Materiaux.exe"
+if exist "build\bin\Gestion-de-Stock.exe" (
+    copy "build\bin\Gestion-de-Stock.exe" "Gestion-de-Stock.exe" >nul
+    start "" "Gestion-de-Stock.exe"
     exit /b 0
 )
 

@@ -1,4 +1,5 @@
 <script>
+  import logo from '../assets/images/gestion-stock.png';
   import { GetAPropos } from '../../wailsjs/go/main/App.js';
   import { onMount } from 'svelte';
 
@@ -6,7 +7,7 @@
   export let onClose = () => {};
 
   let info = {
-    nom: 'Exellence Materiaux',
+    nom: 'Gestion de Stock',
     version: '1.0.0',
     annee: '2026',
     auteurs: 'Adel Mahmoud et Sidou'
@@ -28,7 +29,7 @@
         <button class="close-btn" on:click={onClose}>&times;</button>
       </div>
       <div class="modal-body">
-        <div class="app-badge">EM</div>
+        <img class="app-badge" src={logo} alt="Logo Gestion de Stock" />
         <h3>{info.nom}</h3>
         <p class="subtitle">Logiciel de gestion de stock et facturation</p>
         <div class="details">
@@ -102,16 +103,9 @@
     text-align: center;
   }
   .app-badge {
-    width: 64px;
-    height: 64px;
-    background: #0284c7;
-    color: white;
-    font-size: 1.5rem;
-    font-weight: bold;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 112px;
+    height: 112px;
+    object-fit: contain;
     margin: 0 auto 16px;
   }
   .modal-body h3 {
