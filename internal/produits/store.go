@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -261,10 +262,46 @@ func (s *Store) List(filter FiltreProduits) (PageProduits, error) {
 
 	recherche := strings.TrimSpace(filter.Recherche)
 	if recherche != "" {
-		safeRecherche := strings.ReplaceAll(recherche, `"`, `""`)
-		ftsQuery := fmt.Sprintf(`"%s"*`, safeRecherche)
-		whereClauses = append(whereClauses, "p.rowid IN (SELECT rowid FROM produits_fts WHERE produits_fts MATCH ?)")
-		args = append(args, ftsQuery)
+		words := strings.Fields(recherche)
+		var ftsTokens []string
+		for _, w := range words {
+			var cleaned strings.Builder
+			for _, r := range w {
+				if unicode.IsLetter(r) || unicode.IsDigit(r) {
+					cleaned.WriteRune(r)
+				}
+			}
+			sClean := cleaned.String()
+			if sClean != "" {
+				ftsTokens = append(ftsTokens, sClean+"*")
+			}
+		}
+
+		ftsMatch := ""
+		if len(ftsTokens) > 0 {
+			ftsMatch = strings.Join(ftsTokens, " AND ")
+		}
+
+		var tokenClauses []string
+		var tokenArgs []interface{}
+
+		for _, w := range words {
+			pat := "%" + w + "%"
+			tokenClauses = append(tokenClauses, "(p.code_barres LIKE ? OR p.reference LIKE ? OR p.designation LIKE ? OR p.description LIKE ?)")
+			tokenArgs = append(tokenArgs, pat, pat, pat, pat)
+		}
+
+		likePart := strings.Join(tokenClauses, " AND ")
+
+		if ftsMatch != "" {
+			combinedClause := fmt.Sprintf("((%s) OR (p.rowid IN (SELECT rowid FROM produits_fts WHERE produits_fts MATCH ?)))", likePart)
+			whereClauses = append(whereClauses, combinedClause)
+			args = append(args, tokenArgs...)
+			args = append(args, ftsMatch)
+		} else {
+			whereClauses = append(whereClauses, fmt.Sprintf("(%s)", likePart))
+			args = append(args, tokenArgs...)
+		}
 	}
 
 	whereSQL := ""

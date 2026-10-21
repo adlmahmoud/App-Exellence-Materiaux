@@ -1,6 +1,7 @@
 <script>
   import {
     GetProduitParCodeBarres,
+    ListerProduits,
     CreerFacture,
     ImprimerFacturePDF,
     CreerBon,
@@ -13,6 +14,9 @@
   let messageSucces = '';
   let inputScanElement;
 
+  let suggestions = [];
+  let timerSuggestions;
+
   let clientNom = 'Client Comptoir';
   let modeReglement = 'especes';
   let chargementPaiement = false;
@@ -21,20 +25,57 @@
   $: totalTTC = panier.reduce((acc, item) => acc + (item.prixVenteTtc * item.quantite), 0);
   $: totalTVA = totalTTC - totalHT;
 
+  function onInputScan() {
+    clearTimeout(timerSuggestions);
+    const q = codeBarresSaisi.trim();
+    if (q.length < 2) {
+      suggestions = [];
+      return;
+    }
+    timerSuggestions = setTimeout(async () => {
+      try {
+        const res = await ListerProduits({ recherche: q, limit: 5 });
+        suggestions = res.produits || [];
+      } catch (e) {
+        suggestions = [];
+      }
+    }, 150);
+  }
+
+  function choisirSuggestion(p) {
+    ajouterAuPanier(p);
+    codeBarresSaisi = '';
+    suggestions = [];
+    if (inputScanElement) inputScanElement.focus();
+  }
+
   async function scannerOuValider(e) {
     if (e.key === 'Enter') {
       const code = codeBarresSaisi.trim();
       if (!code) return;
       messageErreur = '';
       messageSucces = '';
+      suggestions = [];
 
       try {
         const prod = await GetProduitParCodeBarres(code);
         ajouterAuPanier(prod);
         codeBarresSaisi = '';
       } catch (err) {
-        messageErreur = 'Aucun produit trouvé pour le code : ' + code;
+        try {
+          const res = await ListerProduits({ recherche: code, limit: 1 });
+          if (res && res.produits && res.produits.length > 0) {
+            ajouterAuPanier(res.produits[0]);
+            codeBarresSaisi = '';
+          } else {
+            messageErreur = 'Aucun produit trouvé pour : ' + code;
+          }
+        } catch (e2) {
+          messageErreur = 'Aucun produit trouvé pour : ' + code;
+        }
       }
+    } else if (e.key === 'Escape') {
+      suggestions = [];
     }
   }
 
@@ -167,11 +208,23 @@
     <div class="scan-bar">
       <input
         type="text"
-        placeholder="Scannez un article (ou saisissez le code-barres + Entrée)..."
+        placeholder="Scannez ou tapez (code-barres, nom d'article, référence)..."
         bind:value={codeBarresSaisi}
         bind:this={inputScanElement}
+        on:input={onInputScan}
         on:keydown={scannerOuValider}
       />
+      {#if suggestions.length > 0}
+        <div class="suggestions-dropdown">
+          {#each suggestions as s}
+            <div class="suggestion-item" on:click={() => choisirSuggestion(s)}>
+              <span class="sugg-name">{s.designation}</span>
+              <span class="sugg-code">{s.codeBarres}</span>
+              <span class="sugg-price">{(s.prixVenteTtc / 100).toFixed(2)} € TTC</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -332,14 +385,62 @@
     margin: 0;
     color: #64748b;
   }
+  .scan-bar {
+    position: relative;
+    width: 500px;
+  }
   .scan-bar input {
-    width: 480px;
+    width: 100%;
     padding: 12px 16px;
     border: 2px solid #0284c7;
     border-radius: 8px;
     font-size: 1rem;
     outline: none;
     box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    box-sizing: border-box;
+  }
+  .suggestions-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .suggestion-item {
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.95rem;
+    transition: background 0.1s;
+  }
+  .suggestion-item:last-child {
+    border-bottom: none;
+  }
+  .suggestion-item:hover {
+    background: #f0f9ff;
+  }
+  .sugg-name {
+    font-weight: 600;
+    color: #0f172a;
+    flex: 1;
+  }
+  .sugg-code {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0 12px;
+  }
+  .sugg-price {
+    font-weight: 700;
+    color: #0284c7;
   }
   .layout {
     display: grid;

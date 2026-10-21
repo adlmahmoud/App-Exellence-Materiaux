@@ -71,7 +71,24 @@
     }
   }
 
+  let debounceTimer;
+
+  function rechercheReactive() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      page = 1;
+      chargerProduits();
+    }, 150);
+  }
+
+  function effacerRecherche() {
+    recherche = '';
+    page = 1;
+    chargerProduits();
+  }
+
   function chercher() {
+    clearTimeout(debounceTimer);
     page = 1;
     chargerProduits();
   }
@@ -200,12 +217,19 @@
   {/if}
 
   <div class="search-bar">
-    <input
-      type="text"
-      placeholder="Rechercher par désignation, référence ou code-barres (puis Entrée)..."
-      bind:value={recherche}
-      on:keydown={(e) => e.key === 'Enter' && chercher()}
-    />
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        placeholder="Rechercher instantanément par désignation, référence ou code-barres..."
+        bind:value={recherche}
+        on:input={rechercheReactive}
+        on:keydown={(e) => e.key === 'Enter' && chercher()}
+      />
+      {#if recherche}
+        <button class="btn-clear" on:click={effacerRecherche} title="Effacer la recherche">&times;</button>
+      {/if}
+    </div>
     <button class="btn-search" on:click={chercher}>Rechercher</button>
   </div>
 
@@ -441,12 +465,46 @@
     gap: 10px;
     margin-bottom: 16px;
   }
-  .search-bar input {
+  .search-input-wrapper {
     flex: 1;
-    padding: 10px 16px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 1rem;
+    color: #64748b;
+    pointer-events: none;
+  }
+  .search-input-wrapper input {
+    width: 100%;
+    padding: 10px 38px 10px 38px;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     font-size: 1rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-input-wrapper input:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  }
+  .btn-clear {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    border: none;
+    font-size: 1.3rem;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 6px;
+  }
+  .btn-clear:hover {
+    color: #334155;
   }
   .btn-search {
     background: #334155;

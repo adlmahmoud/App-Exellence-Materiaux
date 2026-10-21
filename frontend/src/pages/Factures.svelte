@@ -88,8 +88,25 @@
     } catch (e) {}
   }
 
+  let debounceTimer;
+
+  function rechercheReactive() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      page = 1;
+      chargerDonnees();
+    }, 150);
+  }
+
+  function effacerRecherche() {
+    recherche = '';
+    page = 1;
+    chargerDonnees();
+  }
+
   function changerOnglet(onglet) {
     ongletActif = onglet;
+    recherche = '';
     page = 1;
     chargerDonnees();
   }
@@ -342,6 +359,21 @@
     >
       Bons de livraison ({totalBons})
     </button>
+  </div>
+
+  <div class="search-bar">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        placeholder={ongletActif === 'factures' ? 'Rechercher une facture par numéro ou client...' : 'Rechercher un bon par numéro, destinataire ou réf...'}
+        bind:value={recherche}
+        on:input={rechercheReactive}
+      />
+      {#if recherche}
+        <button class="btn-clear" on:click={effacerRecherche} title="Effacer">&times;</button>
+      {/if}
+    </div>
   </div>
 
   <div class="card">
@@ -686,6 +718,52 @@
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+  }
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .search-input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    font-size: 1rem;
+    color: #64748b;
+    pointer-events: none;
+  }
+  .search-input-wrapper input {
+    width: 100%;
+    padding: 10px 38px 10px 38px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-input-wrapper input:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  }
+  .btn-clear {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    border: none;
+    font-size: 1.3rem;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 6px;
+  }
+  .btn-clear:hover {
+    color: #334155;
   }
   .tab-btn {
     padding: 10px 18px;
