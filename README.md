@@ -1,92 +1,94 @@
 # Exellence Matériaux
 
-Logiciel de bureau de gestion de stock, caisse rapide et facturation pour **Exellence Matériaux**.  
-Développé par **Adel Mahmoud et Sidou**.
+Logiciel de bureau tout-en-un : Caisse & scan rapide, gestion des stocks, facturation et bons de livraison pour **Exellence Matériaux**.  
+Conçu et développé par **Adel Mahmoud et Sidou**.
 
 ---
 
-## 🚀 Guide d'installation & Lancement rapide (Pour votre ami / utilisateur)
+## ⚡ Prérequis (Pour l'utilisateur)
 
-Si vous avez reçu le logiciel sous forme d'archive ZIP ou de dossier :
+**AUCUNE CONNAISSANCE EN CODE N'EST NÉCESSAIRE.**  
+Le logiciel est **déjà compilé et 100% prêt à l'emploi**.
 
-### Étape 1 : Extraire l'archive (Important)
-Si vous avez reçu un fichier `.zip` :
+- ❌ **Pas besoin** d'installer Go.
+- ❌ **Pas besoin** d'installer Node.js ni de terminal.
+- ❌ **Pas de lignes de commande** à taper.
+- ✔️ **Le seul prérequis** : Un ordinateur sous **Windows 10 ou Windows 11**.
+
+*(Note : Dans 99% des cas, Windows possède déjà le composant d'affichage WebView2. S'il venait à manquer sur un vieux PC, il suffit de [cliquer ici pour l'installer en 30 secondes](https://go.microsoft.com/fwlink/p/?LinkId=2124703)).*
+
+---
+
+## 🚀 Installation & Lancement en 2 étapes
+
+### 1. Extraire le dossier
+Si vous avez reçu l'archive **`Exellence-Materiaux-Complet.zip`** :
 1. Faites un **Clic droit** sur le fichier ZIP.
-2. Cliquez sur **« Extraire tout... »** et choisissez un emplacement (par exemple sur votre **Bureau**).
-3. Ouvrez le dossier extrait.
-> ⚠️ **Attention** : Ne double-cliquez pas sur le logiciel directement depuis l'archive ZIP sans l'extraire, sinon Windows bloque la création de la base de données locale.
+2. Cliquez sur **« Extraire tout... »** puis validez (par exemple sur votre **Bureau**).
+> ⚠️ **Important** : Ne lancez pas le logiciel directement depuis le fichier ZIP sans l'extraire !
 
-### Étape 2 : Lancer le logiciel
-- Double-cliquez sur **`Exellence-Materiaux.exe`** (ou sur le script **`lancer.bat`**).
-
----
-
-## 🛠️ Que faire si le logiciel ne s'ouvre pas ?
-
-### 1. Message bleu : « Windows a protégé votre ordinateur » (SmartScreen)
-C'est la sécurité par défaut de Windows lorsqu'un fichier `.exe` est téléchargé par Internet (WhatsApp, Discord, WeTransfer, Google Drive) ou copié par clé USB :
-1. Cliquez sur le lien textuel **« Informations complémentaires »** situé sous le message d'alerte.
-2. Le bouton **« Exécuter quand même »** apparaît : cliquez dessus. Le logiciel démarre immédiatement.
-3. *Alternative* : Faites un **Clic droit sur `Exellence-Materiaux.exe`** -> **Propriétés** -> en bas de l'onglet Général, cochez la case **« Débloquer »** -> **Appliquer** -> **OK**.
-
-### 2. L'application ne s'ouvre pas ou se ferme immédiatement (WebView2)
-L'application utilise le moteur natif Microsoft WebView2 pour afficher son interface. Sur certains ordinateurs Windows 10 non mis à jour ou versions spécifiques, ce composant est absent.
-- **Solution** : Téléchargez et installez l'installateur officiel Microsoft (gratuit, installation en 30 secondes) :  
-  👉 [Télécharger Microsoft Edge WebView2 Evergreen Bootstrapper](https://go.microsoft.com/fwlink/p/?LinkId=2124703)
-
-### 3. L'antivirus bloque le fichier
-Certains antivirus tiers (Avast, Norton, McAfee) signalent parfois les exécutables récents non enregistrés dans leurs bases comme « Fichier inconnu ».
-- **Solution** : Ajoutez une exception ou cliquez sur « Autoriser ce fichier » dans votre antivirus.
+### 2. Démarrer le logiciel
+- Ouvrez le dossier extrait et double-cliquez directement sur **`Exellence-Materiaux.exe`** (ou sur **`lancer.bat`**).
+- Le logiciel s'ouvre directement à l'écran !
 
 ---
 
-## 🔒 Confidentialité & Données de l'entreprise (Kbis)
+## 🛠️ Que faire si Windows affiche un message au premier lancement ?
 
-Pour garantir la confidentialité totale des informations juridiques (SIREN, SIRET, RCS, adresse du siège, capital) et permettre de publier ce projet sur **GitHub en toute sécurité** :
+### 1. Écran bleu « Windows a protégé votre ordinateur » (SmartScreen)
+C'est une alerte de sécurité standard de Windows lorsque vous recevez un nouveau fichier `.exe` par WhatsApp, Discord, WeTransfer ou clé USB.
 
-1. Les données d'immatriculation réelles ne sont **jamais** envoyées sur GitHub.
-2. Le fichier `kbis.json` contenant les informations privées est automatiquement ignoré par `.gitignore`.
-3. Pour configurer les coordonnées de votre société :
-   - Dupliquez le modèle `config.entreprise.example.json` et renommez-le en `kbis.json`.
-   - Remplissez vos vraies informations dans `kbis.json`.
-   - Au lancement, le logiciel importe automatiquement ces données dans la base locale `exellence.db`.
-   - Vous pouvez également modifier ces informations à tout moment dans l'onglet **Paramètres** du logiciel.
+Pour l'ouvrir en 2 clics :
+1. Cliquez sur le lien **« Informations complémentaires »** sous le message.
+2. Cliquez sur le bouton **« Exécuter quand même »** qui apparaît.  
+*(L'application se lance et ne vous le redemandera plus).*
 
----
-
-## 📦 Fonctionnalités incluses
-
-- **🛒 Caisse & Scan Rapide** : Prise en charge des douchettes code-barres USB (code + Entrée automatique), gestion du panier, calcul automatique HT/TVA/TTC, encaissement (Espèces, Carte Bancaire, Virement, Chèque).
-- **📦 Catalogue Produits** : Recherche instantanée plein texte via SQLite FTS5, gestion des stocks actuels et seuils d'alerte, prix d'achat HT, vente HT et calcul automatique de la TVA.
-- **📊 Gestion des Stocks** : Historique complet traçable (entrées, sorties, ventes, ajustements d'inventaire), détection et alertes visuelles de stock bas.
-- **🧾 Factures & Bons de livraison** : Numérotation séquentielle certifiée sans trou (`FAC-YYYY-XXXXX`, `BL-YYYY-XXXXX`), génération et impression instantanée de PDF avec logo haute définition et mentions légales.
-- **⚙️ Paramètres & Sauvegarde** : Sauvegarde instantanée de la base locale SQLite (`VACUUM INTO`) en un clic.
+*Astuce alternative :* Clic droit sur `Exellence-Materiaux.exe` ➔ **Propriétés** ➔ tout en bas, cochez la case **« Débloquer »** ➔ **Appliquer** ➔ **OK**.
 
 ---
 
-## 💻 Guide développeur (Compilation depuis les sources)
+## 📦 Ce que fait le logiciel
 
-Si vous souhaitez compiler l'application vous-même depuis le code source :
-
-### Prérequis
-- [Go](https://go.dev/) >= 1.22
-- [Node.js](https://nodejs.org/) >= 18 & npm
-- [Wails CLI v2](https://wails.io/) : `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-
-### Commandes
-1. **Mode développement (Live reload)** :
-   ```bash
-   wails dev
-   ```
-
-2. **Compilation de l'exécutable Windows** :
-   ```bash
-   wails build -tags native_webview2loader
-   ```
-   L'exécutable généré se trouve dans `build/bin/exellence-materiaux.exe`.
+- **🛒 Caisse & Douchette USB** : Branchez votre lecteur code-barres USB, scannez vos articles (ou tapez le code + Entrée), encaissez et imprimez la facture directement.
+- **📦 Produits & Stocks** : Catalogue avec recherche instantanée, entrées de stock fournisseurs, sorties, casse, ajustements physiques d'inventaire et alertes automatiques de stock bas.
+- **🧾 Factures & Bons de livraison** : Numérotation séquentielle officielle sans trou (`FAC-2026-XXXXX`), modèle conforme avec logo officiel haute définition, calcul automatique HT/TVA/TTC et génération de PDF instantanée.
+- **⚙️ Paramètres & Sauvegarde** : Sauvegarde sécurisée de toutes vos données en un clic.
 
 ---
 
-## 📄 Licence & Droits d'auteur
+## 🔒 Confidentialité des données de l'entreprise (Kbis)
+
+Ce projet est configuré pour être mis sur **GitHub sans aucun risque** de fuite de données :
+- Vos informations confidentielles (SIREN, RCS, adresse exacte) se trouvent dans le fichier local **`kbis.json`**.
+- Ce fichier est strictement **bloqué et ignoré par Git** (il n'ira jamais sur GitHub).
+- Pour transmettre le logiciel à un ami en privé, envoyez-lui directement le pack ZIP complet contenant le fichier `kbis.json`.
+
+---
+
+## 💻 Annexe : Pour les développeurs uniquement (Optionnel)
+
+<details>
+<summary>Cliquez ici pour afficher les commandes de compilation depuis les sources</summary>
+
+Si vous souhaitez recompiler l'application vous-même depuis le code source :
+
+**Prérequis développeur :**
+- Go >= 1.22
+- Node.js >= 18 & npm
+- Wails CLI v2 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
+
+**Commandes :**
+```bash
+# Lancement en mode développement
+wails dev
+
+# Compilation de l'exécutable final Windows
+wails build -tags native_webview2loader
+```
+</details>
+
+---
+
+## 📄 Licence
 
 Copyright © 2026 **Adel Mahmoud et Sidou**. Tous droits réservés.
