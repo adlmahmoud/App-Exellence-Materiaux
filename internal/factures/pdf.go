@@ -309,9 +309,11 @@ func GenererBonPDF(detail DetailBon, logoPath string, cheminDestination string) 
 	pdf.SetLineWidth(0.2)
 	pdf.SetFont(fontFamily, "B", 10)
 
-	pdf.CellFormat(100, 8, tr("Désignation"), "1", 0, "L", true, 0, "")
-	pdf.CellFormat(30, 8, tr("Qté Livrée"), "1", 0, "C", true, 0, "")
-	pdf.CellFormat(50, 8, tr("Observations"), "1", 1, "L", true, 0, "")
+	pdf.CellFormat(80, 8, tr("Désignation"), "1", 0, "L", true, 0, "")
+	pdf.CellFormat(20, 8, tr("Qté Livrée"), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(26, 8, tr("PU HT"), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(22, 8, tr("TVA"), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(32, 8, tr("Total HT"), "1", 1, "R", true, 0, "")
 
 	pdf.SetFont(fontFamily, "", 9)
 	pdf.SetTextColor(30, 41, 59)
@@ -324,29 +326,72 @@ func GenererBonPDF(detail DetailBon, logoPath string, cheminDestination string) 
 			pdf.SetFillColor(255, 255, 255)
 		}
 
+		puHTStr := fmt.Sprintf("%.2f €", float64(ligne.PrixUnitaireHT)/100.0)
+		tvaStr := fmt.Sprintf("%.1f %%", float64(ligne.TauxTVA)/100.0)
+		if (ligne.TauxTVA % 100) == 0 {
+			tvaStr = fmt.Sprintf("%d %%", ligne.TauxTVA/100)
+		}
+		totalHTStr := fmt.Sprintf("%.2f €", float64(ligne.MontantHT)/100.0)
+
 		pdf.SetX(15)
-		pdf.CellFormat(100, 7, tr(ligne.Designation), "1", 0, "L", true, 0, "")
-		pdf.CellFormat(30, 7, tr(fmt.Sprintf("%d", ligne.Quantite)), "1", 0, "C", true, 0, "")
-		pdf.CellFormat(50, 7, tr("Conforme"), "1", 1, "L", true, 0, "")
+		pdf.CellFormat(80, 7, tr(ligne.Designation), "1", 0, "L", true, 0, "")
+		pdf.CellFormat(20, 7, tr(fmt.Sprintf("%d", ligne.Quantite)), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(26, 7, tr(puHTStr), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(22, 7, tr(tvaStr), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(32, 7, tr(totalHTStr), "1", 1, "R", true, 0, "")
 	}
 
-	pdf.Ln(10)
-	signY := pdf.GetY()
-	if signY > 210 {
+	pdf.Ln(4)
+	totalsY := pdf.GetY()
+	if totalsY > 200 {
 		pdf.AddPage()
-		signY = 20
+		totalsY = 20
 	}
 
-	pdf.SetXY(15, signY)
+	pdf.SetXY(110, totalsY)
+	pdf.SetFont(fontFamily, "", 10)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.CellFormat(50, 6, tr("Total HT :"), "", 0, "R", false, 0, "")
+	pdf.CellFormat(35, 6, tr(fmt.Sprintf("%.2f €", float64(detail.Bon.TotalHT)/100.0)), "", 1, "R", false, 0, "")
+
+	pdf.SetX(110)
+	pdf.CellFormat(50, 6, tr("TVA :"), "", 0, "R", false, 0, "")
+	pdf.CellFormat(35, 6, tr(fmt.Sprintf("%.2f €", float64(detail.Bon.TotalTVA)/100.0)), "", 1, "R", false, 0, "")
+
+	pdf.SetX(110)
+	pdf.SetFont(fontFamily, "B", 12)
+	pdf.CellFormat(50, 8, tr("TOTAL TTC :"), "", 0, "R", false, 0, "")
+	pdf.CellFormat(35, 8, tr(fmt.Sprintf("%.2f €", float64(detail.Bon.TotalTTC)/100.0)), "", 1, "R", false, 0, "")
+
+	currentY := totalsY + 22
+	if strings.TrimSpace(detail.Bon.Notes) != "" {
+		if currentY > 215 {
+			pdf.AddPage()
+			currentY = 20
+		}
+		pdf.SetXY(15, currentY)
+		pdf.SetFont(fontFamily, "", 9)
+		pdf.SetTextColor(100, 116, 139)
+		pdf.MultiCell(180, 5, tr(fmt.Sprintf("Observations : %s", detail.Bon.Notes)), "", "L", false)
+		currentY = pdf.GetY() + 4
+	}
+
+	if currentY > 215 {
+		pdf.AddPage()
+		currentY = 20
+	}
+
+	pdf.SetXY(15, currentY)
 	pdf.SetFont(fontFamily, "B", 10)
+	pdf.SetTextColor(30, 41, 59)
 	pdf.CellFormat(85, 6, tr("Signature et cachet transporteur :"), "1", 0, "L", false, 0, "")
 	pdf.SetX(110)
 	pdf.CellFormat(85, 6, tr("Date et signature réceptionnaire :"), "1", 1, "L", false, 0, "")
 
 	pdf.SetX(15)
-	pdf.CellFormat(85, 25, "", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(85, 24, "", "1", 0, "L", false, 0, "")
 	pdf.SetX(110)
-	pdf.CellFormat(85, 25, "", "1", 1, "L", false, 0, "")
+	pdf.CellFormat(85, 24, "", "1", 1, "L", false, 0, "")
 
 	pdf.SetY(272)
 	pdf.SetFont(fontFamily, "", 8)
@@ -356,7 +401,14 @@ func GenererBonPDF(detail DetailBon, logoPath string, cheminDestination string) 
 	if denom == "" {
 		denom = "EXCELLENCE MATÉRIAUX"
 	}
-	pdf.CellFormat(180, 4, tr(denom), "", 1, "C", false, 0, "")
+	infoFooter := denom
+	if detail.Bon.EntrepriseAdresse != "" {
+		infoFooter += " - " + detail.Bon.EntrepriseAdresse
+	}
+	if detail.Bon.EntrepriseTelephone != "" {
+		infoFooter += " - Tél: " + detail.Bon.EntrepriseTelephone
+	}
+	pdf.CellFormat(180, 4, tr(infoFooter), "", 1, "C", false, 0, "")
 
 	return pdf.OutputFileAndClose(cheminDestination)
 }

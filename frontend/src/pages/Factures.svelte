@@ -176,6 +176,13 @@
     return acc + ht + tva;
   }, 0);
 
+  $: totalBonHT = formBon.lignes.reduce((acc, l) => acc + (Number(l.prixUnitaireHT || 0) * Number(l.quantite || 0)), 0);
+  $: totalBonTTC = formBon.lignes.reduce((acc, l) => {
+    const ht = Number(l.prixUnitaireHT || 0) * Number(l.quantite || 0);
+    const tva = (ht * Number(l.tauxTva || 2000)) / 10000;
+    return acc + ht + tva;
+  }, 0);
+
   async function validerNouvelleFacture() {
     messageErreur = '';
     if (!formFacture.clientNom.trim()) {
@@ -429,7 +436,7 @@
             <th>Date</th>
             <th>Destinataire</th>
             <th>Réf. Externe</th>
-            <th class="text-right">Articles</th>
+            <th class="text-right">Total TTC</th>
             <th>Statut</th>
             <th class="text-right">Action</th>
           </tr>
@@ -633,9 +640,12 @@
           <table class="table-lignes">
             <thead>
               <tr>
-                <th style="width: 30%;">Article rapide</th>
+                <th style="width: 25%;">Article rapide</th>
                 <th>Désignation</th>
-                <th style="width: 15%;">Quantité</th>
+                <th style="width: 10%;">Qté</th>
+                <th style="width: 15%;">PU HT (€)</th>
+                <th style="width: 12%;">TVA</th>
+                <th style="width: 15%;">Total HT</th>
                 <th style="width: 5%;"></th>
               </tr>
             </thead>
@@ -657,12 +667,37 @@
                     <input type="number" min="1" bind:value={l.quantite} />
                   </td>
                   <td>
+                    <input type="number" step="0.01" bind:value={l.prixUnitaireHT} />
+                  </td>
+                  <td>
+                    <select bind:value={l.tauxTva}>
+                      <option value={2000}>20 %</option>
+                      <option value={1000}>10 %</option>
+                      <option value={550}>5.5 %</option>
+                      <option value={0}>0 %</option>
+                    </select>
+                  </td>
+                  <td>
+                    <strong>{(Number(l.prixUnitaireHT || 0) * Number(l.quantite || 0)).toFixed(2)} €</strong>
+                  </td>
+                  <td>
                     <button class="btn-del" on:click={() => supprimerLigneBon(idx)}>&times;</button>
                   </td>
                 </tr>
               {/each}
             </tbody>
           </table>
+        </div>
+
+        <div class="recap-facture">
+          <div class="total-line">
+            <span>Total HT :</span>
+            <strong>{totalBonHT.toFixed(2)} €</strong>
+          </div>
+          <div class="total-line ttc">
+            <span>TOTAL TTC :</span>
+            <strong>{totalBonTTC.toFixed(2)} €</strong>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
