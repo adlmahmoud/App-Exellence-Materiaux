@@ -3,6 +3,7 @@ package factures
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +72,16 @@ func TestGenererFacturePDF(t *testing.T) {
 	err := GenererFacturePDF(detail, logoPath, outPDF)
 	if err != nil {
 		t.Fatalf("GenererFacturePDF failed: %v", err)
+	}
+	pdfData, err := os.ReadFile(outPDF)
+	if err != nil {
+		t.Fatalf("Impossible de lire la facture générée: %v", err)
+	}
+	if logoPath != "" && !strings.Contains(string(pdfData), "/Subtype /Image") {
+		t.Fatal("La facture doit contenir le logo configuré")
+	}
+	if logoPath == "" && strings.Contains(string(pdfData), "/Subtype /Image") {
+		t.Fatal("La facture ne doit pas contenir de logo non configuré")
 	}
 
 	samplePath := filepath.Join("..", "..", "Exemple_Facture_Generee.pdf")
@@ -143,5 +154,30 @@ func TestGenererBonPDF(t *testing.T) {
 	info, err := os.Stat(outPDF)
 	if err != nil || info.Size() == 0 {
 		t.Fatalf("Le fichier PDF généré est vide ou introuvable: %v", err)
+	}
+	pdfData, err := os.ReadFile(outPDF)
+	if err != nil {
+		t.Fatalf("Impossible de lire le bon généré: %v", err)
+	}
+	if logoPath != "" && !strings.Contains(string(pdfData), "/Subtype /Image") {
+		t.Fatal("Le bon de livraison doit contenir le logo configuré")
+	}
+	if logoPath == "" && strings.Contains(string(pdfData), "/Subtype /Image") {
+		t.Fatal("Le bon de livraison ne doit pas contenir de logo non configuré")
+	}
+
+	if logoPath != "" {
+		detail.Bon.TypeBon = BonCommande
+		bonCommandePath := filepath.Join(tempDir, "bon_commande_test.pdf")
+		if err := GenererBonPDF(detail, logoPath, bonCommandePath); err != nil {
+			t.Fatalf("GenererBonPDF commande failed: %v", err)
+		}
+		pdfData, err = os.ReadFile(bonCommandePath)
+		if err != nil {
+			t.Fatalf("Impossible de lire le bon de commande généré: %v", err)
+		}
+		if !strings.Contains(string(pdfData), "/Subtype /Image") {
+			t.Fatal("Le bon de commande doit également contenir le logo configuré")
+		}
 	}
 }

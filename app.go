@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,12 +16,14 @@ import (
 	"exellence-materiaux/internal/parametres"
 	"exellence-materiaux/internal/produits"
 	"exellence-materiaux/internal/stock"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"image/png"
 )
 
 type App struct {
 	ctx           context.Context
 	database      *db.DB
-	projectDir    string
+	dataDir       string
 	produitsStore *produits.Store
 	stockStore    *stock.Store
 	facturesStore *factures.Store
@@ -42,10 +48,47 @@ func getProjectDir() string {
 	return "."
 }
 
+func resolveDataDir(projectDir, userConfigDir string) (string, error) {
+	legacyDBPath := filepath.Join(projectDir, "exellence.db")
+	if info, err := os.Stat(legacyDBPath); err == nil && !info.IsDir() {
+		return projectDir, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("verification de l'ancienne base de donnees: %w", err)
+	}
+
+	if userConfigDir == "" {
+		return "", fmt.Errorf("repertoire de donnees utilisateur indisponible")
+	}
+
+	dataDir := filepath.Join(userConfigDir, "Gestion de Stock")
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return "", fmt.Errorf("creation du repertoire de donnees: %w", err)
+	}
+
+	return dataDir, nil
+}
+
+func getDataDir() (string, error) {
+	projectDir := getProjectDir()
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		if _, statErr := os.Stat(filepath.Join(projectDir, "exellence.db")); statErr == nil {
+			return projectDir, nil
+		}
+		return "", fmt.Errorf("repertoire de configuration utilisateur indisponible: %w", err)
+	}
+	return resolveDataDir(projectDir, userConfigDir)
+}
+
 func NewApp() *App {
 	a := &App{}
-	a.projectDir = getProjectDir()
-	dbPath := filepath.Join(a.projectDir, "exellence.db")
+	dataDir, err := getDataDir()
+	if err != nil {
+		println(fmt.Sprintf("application data directory error: %v", err))
+		return a
+	}
+	a.dataDir = dataDir
+	dbPath := filepath.Join(a.dataDir, "exellence.db")
 	database, err := db.Open(dbPath)
 	if err == nil {
 		a.database = database
@@ -103,6 +146,69 @@ func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
 	return p, nil
 }
 
+func (a *App) ImporterLogo() (string, error) {
+	if a.database == nil {
+		return "", fmt.Errorf("base de données non initialisée")
+	}
+	if a.ctx == nil {
+		return "", fmt.Errorf("interface de l'application non initialisée")
+	}
+
+	selectedPath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Choisir le logo des factures et bons de livraison",
+		DefaultDirectory: a.dataDir,
+		Filters: []runtime.FileFilter{{
+			DisplayName: "Images PNG ou JPEG",
+			Pattern:     "*.png;*.jpg;*.jpeg",
+		}},
+	})
+	if err != nil {
+		return "", fmt.Errorf("sélection du logo: %w", err)
+	}
+	if selectedPath == "" {
+		return "", nil
+	}
+
+	source, err := os.ReadFile(selectedPath)
+	if err != nil {
+		return "", fmt.Errorf("lecture du logo: %w", err)
+	}
+	if len(source) > 10<<20 {
+		return "", fmt.Errorf("le logo ne doit pas dépasser 10 Mo")
+	}
+
+	config, _, err := image.DecodeConfig(bytes.NewReader(source))
+	if err != nil {
+		return "", fmt.Errorf("image de logo invalide: %w", err)
+	}
+	if config.Width <= 0 || config.Height <= 0 || config.Width > 4096 || config.Height > 4096 {
+		return "", fmt.Errorf("les dimensions du logo ne doivent pas dépasser 4096 × 4096 pixels")
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(source))
+	if err != nil {
+		return "", fmt.Errorf("décodage du logo: %w", err)
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, img); err != nil {
+		return "", fmt.Errorf("conversion du logo en PNG: %w", err)
+	}
+
+	logoPath := filepath.Join(a.dataDir, "logo_facture.png")
+	if err := os.WriteFile(logoPath, encoded.Bytes(), 0600); err != nil {
+		return "", fmt.Errorf("enregistrement du logo: %w", err)
+	}
+
+	_, err = a.database.Exec(`UPDATE parametres_entreprise
+		SET logo_path = ?, updated_at = datetime('now')
+		WHERE id = '01DEFAULTCONFIG00000000000'`, logoPath)
+	if err != nil {
+		return "", fmt.Errorf("enregistrement du chemin du logo: %w", err)
+	}
+
+	return logoPath, nil
+}
+
 func (a *App) UpdateParametres(input parametres.ModificationParametres) error {
 	if a.database == nil {
 		return fmt.Errorf("base de données non initialisée")
@@ -133,7 +239,7 @@ func (a *App) SauvegarderBase(dossierDestination string) (string, error) {
 
 	targetDir := dossierDestination
 	if targetDir == "" || targetDir == "." {
-		targetDir = a.projectDir
+		targetDir = a.dataDir
 	}
 
 	destPath := filepath.Join(targetDir, "exellence_backup.db")
@@ -216,9 +322,14 @@ func (a *App) CreerFacture(input factures.NouvelleFacture) (factures.DetailFactu
 		return detail, err
 	}
 
-	logoPath := filepath.Join(a.projectDir, "logo.png")
-	pdfPath := filepath.Join(a.projectDir, fmt.Sprintf("Facture_%s.pdf", detail.Facture.Numero))
-	_ = factures.GenererFacturePDF(detail, logoPath, pdfPath)
+	settings, err := a.GetParametres()
+	if err != nil {
+		return detail, fmt.Errorf("recuperation du logo: %w", err)
+	}
+	pdfPath := filepath.Join(a.dataDir, fmt.Sprintf("Facture_%s.pdf", detail.Facture.Numero))
+	if err := factures.GenererFacturePDF(detail, settings.LogoPath, pdfPath); err != nil {
+		return detail, fmt.Errorf("generation pdf: %w", err)
+	}
 
 	return detail, nil
 }
@@ -246,9 +357,12 @@ func (a *App) ImprimerFacturePDF(id string) (string, error) {
 		return "", err
 	}
 
-	logoPath := filepath.Join(a.projectDir, "logo.png")
-	pdfPath := filepath.Join(a.projectDir, fmt.Sprintf("Facture_%s.pdf", detail.Facture.Numero))
-	if err := factures.GenererFacturePDF(detail, logoPath, pdfPath); err != nil {
+	settings, err := a.GetParametres()
+	if err != nil {
+		return "", fmt.Errorf("recuperation du logo: %w", err)
+	}
+	pdfPath := filepath.Join(a.dataDir, fmt.Sprintf("Facture_%s.pdf", detail.Facture.Numero))
+	if err := factures.GenererFacturePDF(detail, settings.LogoPath, pdfPath); err != nil {
 		return "", fmt.Errorf("generation pdf: %w", err)
 	}
 
@@ -266,9 +380,14 @@ func (a *App) CreerBon(input factures.NouveauBon) (factures.DetailBon, error) {
 		return detail, err
 	}
 
-	logoPath := filepath.Join(a.projectDir, "logo.png")
-	pdfPath := filepath.Join(a.projectDir, fmt.Sprintf("Bon_%s.pdf", detail.Bon.Numero))
-	_ = factures.GenererBonPDF(detail, logoPath, pdfPath)
+	settings, err := a.GetParametres()
+	if err != nil {
+		return detail, fmt.Errorf("recuperation du logo: %w", err)
+	}
+	pdfPath := filepath.Join(a.dataDir, fmt.Sprintf("Bon_%s.pdf", detail.Bon.Numero))
+	if err := factures.GenererBonPDF(detail, settings.LogoPath, pdfPath); err != nil {
+		return detail, fmt.Errorf("generation pdf bon: %w", err)
+	}
 
 	return detail, nil
 }
@@ -296,9 +415,12 @@ func (a *App) ImprimerBonPDF(id string) (string, error) {
 		return "", err
 	}
 
-	logoPath := filepath.Join(a.projectDir, "logo.png")
-	pdfPath := filepath.Join(a.projectDir, fmt.Sprintf("Bon_%s.pdf", detail.Bon.Numero))
-	if err := factures.GenererBonPDF(detail, logoPath, pdfPath); err != nil {
+	settings, err := a.GetParametres()
+	if err != nil {
+		return "", fmt.Errorf("recuperation du logo: %w", err)
+	}
+	pdfPath := filepath.Join(a.dataDir, fmt.Sprintf("Bon_%s.pdf", detail.Bon.Numero))
+	if err := factures.GenererBonPDF(detail, settings.LogoPath, pdfPath); err != nil {
 		return "", fmt.Errorf("generation pdf bon: %w", err)
 	}
 

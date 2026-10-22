@@ -1,5 +1,5 @@
 <script>
-  import { GetParametres, SauvegarderBase } from '../../wailsjs/go/main/App.js';
+  import { GetParametres, ImporterLogo, SauvegarderBase } from '../../wailsjs/go/main/App.js';
   import { onMount } from 'svelte';
 
   let params = {
@@ -16,6 +16,7 @@
     telephone: '',
     email: '',
     siteWeb: '',
+    logoPath: '',
     devise: 'EUR',
     tauxTvaDefaut: 2000,
     mentionsLegales: '',
@@ -48,6 +49,24 @@
     } catch (err) {
       messageErreur = 'Erreur de sauvegarde : ' + err;
     }
+  }
+
+  async function choisirLogo() {
+    message = '';
+    messageErreur = '';
+    try {
+      const path = await ImporterLogo();
+      if (path) {
+        params = { ...params, logoPath: path };
+        message = 'Logo enregistré pour les factures et bons de livraison.';
+      }
+    } catch (err) {
+      messageErreur = 'Erreur lors de l’ajout du logo : ' + err;
+    }
+  }
+
+  function nomFichierLogo(path) {
+    return path ? path.split(/[\\/]/).pop() : '';
   }
 </script>
 
@@ -125,6 +144,20 @@
             <label>Taux TVA par défaut :</label>
             <input type="text" value={(params.tauxTvaDefaut / 100) + ' %'} readonly />
           </div>
+        </div>
+      </div>
+
+      <div class="card full-width">
+        <h2>Logo des documents</h2>
+        <div class="logo-box">
+          <div>
+            <strong>{params.logoPath ? 'Logo configuré' : 'Aucun logo configuré'}</strong>
+            <p>{params.logoPath ? nomFichierLogo(params.logoPath) : 'Le logo apparaîtra sur les factures et bons de livraison.'}</p>
+          </div>
+          <button class="btn-logo" on:click={choisirLogo}>
+            <span aria-hidden="true">📷</span>
+            {params.logoPath ? 'Remplacer le logo' : 'Ajouter un logo'}
+          </button>
         </div>
       </div>
 
@@ -224,6 +257,31 @@
     justify-content: space-between;
     align-items: center;
     border: 1px dashed #cbd5e1;
+  }
+  .logo-box {
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    border: 1px dashed #cbd5e1;
+  }
+  .logo-box p {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: #64748b;
+  }
+  .btn-logo {
+    background: #0284c7;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
   }
   .backup-box p {
     margin: 4px 0 0;

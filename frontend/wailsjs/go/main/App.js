@@ -42,6 +42,10 @@ export function GetProduitParCodeBarres(arg1) {
   return window['go']['main']['App']['GetProduitParCodeBarres'](arg1);
 }
 
+export function ImporterLogo() {
+  return window['go']['main']['App']['ImporterLogo']();
+}
+
 export function ImprimerBonPDF(arg1) {
   return window['go']['main']['App']['ImprimerBonPDF'](arg1);
 }

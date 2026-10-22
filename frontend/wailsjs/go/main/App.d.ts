@@ -25,6 +25,8 @@ export function GetParametres():Promise<parametres.ParametresEntreprise>;
 
 export function GetProduitParCodeBarres(arg1:string):Promise<produits.Produit>;
 
+export function ImporterLogo():Promise<string>;
+
 export function ImprimerBonPDF(arg1:string):Promise<string>;
 
 export function ImprimerFacturePDF(arg1:string):Promise<string>;

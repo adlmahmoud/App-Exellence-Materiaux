@@ -39,7 +39,7 @@ func GenererFacturePDF(detail DetailFacture, logoPath string, cheminDestination 
 
 	if logoPath != "" {
 		if _, err := os.Stat(logoPath); err == nil {
-			pdf.ImageOptions(logoPath, 15, 12, 55, 0, false, fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}, 0, "")
+			pdf.ImageOptions(logoPath, 15, 5, 35, 0, false, fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}, 0, "")
 		}
 	}
 
@@ -253,7 +253,7 @@ func GenererBonPDF(detail DetailBon, logoPath string, cheminDestination string) 
 
 	if logoPath != "" {
 		if _, err := os.Stat(logoPath); err == nil {
-			pdf.ImageOptions(logoPath, 15, 12, 55, 0, false, fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}, 0, "")
+			pdf.ImageOptions(logoPath, 15, 5, 35, 0, false, fpdf.ImageOptions{ImageType: "PNG", ReadDpi: true}, 0, "")
 		}
 	}
 

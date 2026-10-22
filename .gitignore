@@ -4,8 +4,16 @@
 *.db-journal
 node_modules/
 build/
+!build/
+build/*
+!build/windows/
+build/windows/*
+!build/windows/installer/
+build/windows/installer/*
+!build/windows/installer/project.nsi
 frontend/dist/
 *.exe
+!Gestion-de-Stock-Setup.exe
 *.log
 .env
 kbis*
