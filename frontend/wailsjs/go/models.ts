@@ -643,6 +643,126 @@ export namespace factures {
 
 }
 
+export namespace main {
+	
+	export class NetworkConfig {
+	    mode: string;
+	    listen?: string;
+	    serverUrl?: string;
+	    token?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.listen = source["listen"];
+	        this.serverUrl = source["serverUrl"];
+	        this.token = source["token"];
+	    }
+	}
+	export class ServerInfo {
+	    running: boolean;
+	    port: number;
+	    ips: string[];
+	    mode: string;
+	    serverUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServerInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.port = source["port"];
+	        this.ips = source["ips"];
+	        this.mode = source["mode"];
+	        this.serverUrl = source["serverUrl"];
+	    }
+	}
+
+}
+
+export namespace models {
+	
+	export class ConfigTPE {
+	    mode: string;
+	    portCom: string;
+	    baudRate: number;
+	    adresseIp: string;
+	    portReseau: number;
+	    timeoutSec: number;
+	    simulateurScenario: string;
+	    simulateurDelaiSec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigTPE(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.portCom = source["portCom"];
+	        this.baudRate = source["baudRate"];
+	        this.adresseIp = source["adresseIp"];
+	        this.portReseau = source["portReseau"];
+	        this.timeoutSec = source["timeoutSec"];
+	        this.simulateurScenario = source["simulateurScenario"];
+	        this.simulateurDelaiSec = source["simulateurDelaiSec"];
+	    }
+	}
+	export class ReponsePaiement {
+	    statut: string;
+	    codeReponse: string;
+	    message: string;
+	    montantCentimes: number;
+	    montantEuros: number;
+	    numeroAutorisation: string;
+	    numeroTransaction: string;
+	    typeCarte: string;
+	    dateHeure: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReponsePaiement(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.statut = source["statut"];
+	        this.codeReponse = source["codeReponse"];
+	        this.message = source["message"];
+	        this.montantCentimes = source["montantCentimes"];
+	        this.montantEuros = source["montantEuros"];
+	        this.numeroAutorisation = source["numeroAutorisation"];
+	        this.numeroTransaction = source["numeroTransaction"];
+	        this.typeCarte = source["typeCarte"];
+	        this.dateHeure = source["dateHeure"];
+	    }
+	}
+	export class ResultatTestConnexion {
+	    succes: boolean;
+	    message: string;
+	    mode: string;
+	    details: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResultatTestConnexion(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.succes = source["succes"];
+	        this.message = source["message"];
+	        this.mode = source["mode"];
+	        this.details = source["details"];
+	    }
+	}
+
+}
+
 export namespace parametres {
 	
 	export class ModificationParametres {

@@ -33,7 +33,7 @@ Unicode true
 ## Include the wails tools
 ####
 !define INFO_PROJECTNAME "Gestion-de-Stock"
-!define INFO_COMPANYNAME "EXCELLENCE MATÉRIAUX"
+!define INFO_COMPANYNAME "Gestion de Stock"
 !define INFO_PRODUCTNAME "Gestion de Stock"
 !define PRODUCT_EXECUTABLE "Gestion-de-Stock.exe"
 !include "wails_tools.nsh"

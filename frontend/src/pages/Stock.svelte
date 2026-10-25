@@ -3,10 +3,11 @@
   import {
     ListerMouvementsStock,
     CreerMouvementStock,
+    SupprimerMouvementStock,
     AjusterStock,
     ObtenirAlertesStock,
     ListerProduits
-  } from '../../wailsjs/go/main/App.js';
+  } from '../lib/api.js';
 
   let mouvements = [];
   let alertes = [];
@@ -22,6 +23,7 @@
   let modalEntree = false;
   let modalSortie = false;
   let modalAjustement = false;
+  let mouvementASupprimer = null;
 
   let formEntree = {
     produitId: '',
@@ -205,6 +207,20 @@
     }
   }
 
+  async function confirmerSuppressionMouvement() {
+    if (!mouvementASupprimer) return;
+    messageErreur = '';
+    try {
+      await SupprimerMouvementStock(mouvementASupprimer.id);
+      messageSucces = 'Mouvement supprimé de l’historique. Le stock actuel n’a pas été modifié.';
+      if (mouvements.length === 1 && page > 1) page--;
+      mouvementASupprimer = null;
+      await chargerDonnees();
+    } catch (err) {
+      messageErreur = String(err);
+    }
+  }
+
   function formaterDate(dStr) {
     if (!dStr) return '-';
     try {
@@ -275,13 +291,14 @@
           <th class="text-center">Avant</th>
           <th class="text-center">Après</th>
           <th>Motif / Document</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody>
         {#if chargement}
-          <tr><td colspan="7" class="empty">Chargement de l'historique...</td></tr>
+          <tr><td colspan="8" class="empty">Chargement de l'historique...</td></tr>
         {:else if mouvements.length === 0}
-          <tr><td colspan="7" class="empty">Aucun mouvement de stock enregistré.</td></tr>
+          <tr><td colspan="8" class="empty">Aucun mouvement de stock enregistré.</td></tr>
         {:else}
           {#each mouvements as m}
             <tr>
@@ -320,6 +337,11 @@
                   <span class="doc-ref">({m.referenceDocument})</span>
                 {/if}
               </td>
+              <td>
+                <button class="btn-delete-movement" on:click={() => mouvementASupprimer = m}>
+                  Supprimer
+                </button>
+              </td>
             </tr>
           {/each}
         {/if}
@@ -335,6 +357,26 @@
     {/if}
   </div>
 </div>
+
+{#if mouvementASupprimer}
+  <div class="overlay">
+    <div class="modal modal-small" on:click|stopPropagation>
+      <div class="modal-header">
+        <h2>Confirmation de suppression</h2>
+        <button class="close-btn" on:click={() => mouvementASupprimer = null}>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Supprimer définitivement ce mouvement de l’historique ?</p>
+        <p><strong>{mouvementASupprimer.designation}</strong> — {mouvementASupprimer.quantite}</p>
+        <p class="delete-warning">Cette action ne modifiera pas le stock actuel.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" on:click={() => mouvementASupprimer = null}>Annuler</button>
+        <button class="btn-delete-movement" on:click={confirmerSuppressionMouvement}>Supprimer</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if modalEntree}
   <div class="overlay" on:click={() => modalEntree = false}>
@@ -557,6 +599,24 @@
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 500;
+  }
+  .btn-delete-movement {
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .btn-delete-movement:hover {
+    background: #fecaca;
+  }
+  .delete-warning {
+    color: #b45309;
+    font-weight: 600;
   }
   .table {
     width: 100%;

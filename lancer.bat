@@ -20,13 +20,4 @@ if exist "build\bin\Gestion-de-Stock.exe" (
     exit /b 0
 )
 
-echo Compilation initiale de l'application avec Wails...
-wails build
-if exist "build\bin\Gestion-de-Stock.exe" (
-    copy "build\bin\Gestion-de-Stock.exe" "Gestion-de-Stock.exe" >nul
-    start "" "Gestion-de-Stock.exe"
-    exit /b 0
-)
-
-echo [ERREUR] Echec de la compilation ou du lancement.
 pause

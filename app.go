@@ -3,30 +3,53 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+	"time"
 
+	"exellence-materiaux/internal/auth"
 	"exellence-materiaux/internal/db"
 	"exellence-materiaux/internal/factures"
 	"exellence-materiaux/internal/parametres"
 	"exellence-materiaux/internal/produits"
 	"exellence-materiaux/internal/stock"
+	"exellence-materiaux/Payement_carte/models"
+	"exellence-materiaux/Payement_carte/services"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"image/png"
 )
 
 type App struct {
-	ctx           context.Context
-	database      *db.DB
-	dataDir       string
-	produitsStore *produits.Store
-	stockStore    *stock.Store
-	facturesStore *factures.Store
+	ctx              context.Context
+	database         *db.DB
+	dataDir          string
+	networkConfig    NetworkConfig
+	networkConfigErr error
+	networkServer    *http.Server
+	serverMu         sync.Mutex
+	authStore        *auth.Store
+	sessionMu        sync.RWMutex
+	currentRole      string
+	rpcSessionMu     sync.Mutex
+	rpcSessions      map[string]rpcSession
+	produitsStore    *produits.Store
+	stockStore       *stock.Store
+	facturesStore    *factures.Store
+	tpeService       *services.TPEService
+}
+
+type rpcSession struct {
+	role      string
+	expiresAt time.Time
 }
 
 func getProjectDir() string {
@@ -88,10 +111,16 @@ func NewApp() *App {
 		return a
 	}
 	a.dataDir = dataDir
+	a.tpeService = services.NewTPEService(a.dataDir)
+	if err := a.loadNetworkConfig(); err != nil {
+		a.networkConfigErr = err
+		println(fmt.Sprintf("network configuration error: %v", err))
+	}
 	dbPath := filepath.Join(a.dataDir, "exellence.db")
 	database, err := db.Open(dbPath)
 	if err == nil {
 		a.database = database
+		a.authStore = auth.NewStore(database.DB)
 		a.produitsStore = produits.NewStore(database.DB)
 		a.stockStore = stock.NewStore(database.DB)
 		a.facturesStore = factures.NewStore(database.DB)
@@ -103,12 +132,40 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if a.networkConfigErr != nil {
+		runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+			Type:    runtime.ErrorDialog,
+			Title:   "Configuration réseau invalide",
+			Message: a.networkConfigErr.Error(),
+		})
+		return
+	}
+	if a.networkConfig.Mode == "server" {
+		a.networkServer = newNetworkServer(a)
+		go func() {
+			if err := a.networkServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				println(fmt.Sprintf("network server error: %v", err))
+			}
+		}()
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.stopPartageServer()
 	if a.database != nil {
 		a.database.Close()
 	}
+}
+
+func (a *App) GetNetworkConfig() NetworkConfig {
+	cfg := a.networkConfig
+	if cfg.Token == "" {
+		cfg.Token = defaultNetworkToken
+	}
+	if a.networkConfig.Mode != "client" {
+		return NetworkConfig{Mode: a.networkConfig.Mode, Listen: a.networkConfig.Listen, Token: cfg.Token}
+	}
+	return cfg
 }
 
 func (a *App) GetAPropos() map[string]string {
@@ -120,7 +177,137 @@ func (a *App) GetAPropos() map[string]string {
 	}
 }
 
+func (a *App) GetAuthStatus() (bool, error) {
+	if a.authStore == nil {
+		return false, fmt.Errorf("base de données non initialisée")
+	}
+	return a.authStore.IsConfigured()
+}
+
+func (a *App) SetupAccessPasswords(adminPassword, userPassword string) error {
+	if a.authStore == nil {
+		return fmt.Errorf("base de données non initialisée")
+	}
+	return a.authStore.SetupPasswords(adminPassword, userPassword)
+}
+
+func (a *App) Login(role, password string) error {
+	if a.authStore == nil {
+		return fmt.Errorf("base de données non initialisée")
+	}
+	if err := a.authStore.Authenticate(role, password); err != nil {
+		return err
+	}
+	a.sessionMu.Lock()
+	a.currentRole = role
+	a.sessionMu.Unlock()
+
+	if role == auth.RoleAdmin {
+		a.startPartageServer()
+	}
+
+	return nil
+}
+
+func (a *App) createRPCSession(role, password string) (string, error) {
+	if a.authStore == nil {
+		return "", fmt.Errorf("base de données non initialisée")
+	}
+	if err := a.authStore.Authenticate(role, password); err != nil {
+		return "", err
+	}
+
+	sessionTokenBytes := make([]byte, 32)
+	if _, err := rand.Read(sessionTokenBytes); err != nil {
+		return "", fmt.Errorf("create login session: %w", err)
+	}
+	sessionToken := hex.EncodeToString(sessionTokenBytes)
+
+	a.rpcSessionMu.Lock()
+	if a.rpcSessions == nil {
+		a.rpcSessions = make(map[string]rpcSession)
+	}
+	a.rpcSessions[sessionToken] = rpcSession{role: role, expiresAt: time.Now().Add(12 * time.Hour)}
+	a.rpcSessionMu.Unlock()
+	return sessionToken, nil
+}
+
+func (a *App) rpcSessionRole(sessionToken string) (string, bool) {
+	a.rpcSessionMu.Lock()
+	defer a.rpcSessionMu.Unlock()
+	session, exists := a.rpcSessions[sessionToken]
+	if !exists {
+		return "", false
+	}
+	if time.Now().After(session.expiresAt) {
+		delete(a.rpcSessions, sessionToken)
+		return "", false
+	}
+	return session.role, true
+}
+
+func (a *App) logoutRPCSession(sessionToken string) {
+	a.rpcSessionMu.Lock()
+	delete(a.rpcSessions, sessionToken)
+	a.rpcSessionMu.Unlock()
+}
+
+func (a *App) dispatchRPCAs(role string, request rpcRequest) (any, error) {
+	sessionApp := &App{
+		ctx:           a.ctx,
+		database:      a.database,
+		dataDir:       a.dataDir,
+		networkConfig: a.networkConfig,
+		authStore:     a.authStore,
+		currentRole:   role,
+		produitsStore: a.produitsStore,
+		stockStore:    a.stockStore,
+		facturesStore: a.facturesStore,
+	}
+	return sessionApp.dispatchRPC(request)
+}
+
+func (a *App) Logout() {
+	a.sessionMu.Lock()
+	a.currentRole = ""
+	a.sessionMu.Unlock()
+	a.stopPartageServer()
+}
+
+func (a *App) GetCurrentRole() string {
+	a.sessionMu.RLock()
+	defer a.sessionMu.RUnlock()
+	return a.currentRole
+}
+
+func (a *App) ChangeAccessPasswords(currentAdminPassword, adminPassword, userPassword string) error {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return err
+	}
+	if a.authStore == nil {
+		return fmt.Errorf("base de données non initialisée")
+	}
+	return a.authStore.ChangePasswords(currentAdminPassword, adminPassword, userPassword)
+}
+
+func (a *App) requireRoles(allowed ...string) error {
+	role := a.GetCurrentRole()
+	for _, allowedRole := range allowed {
+		if role == allowedRole {
+			return nil
+		}
+	}
+	return fmt.Errorf("accès refusé : authentification requise ou rôle insuffisant")
+}
+
 func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return parametres.ParametresEntreprise{}, err
+	}
+	return a.getParametres()
+}
+
+func (a *App) getParametres() (parametres.ParametresEntreprise, error) {
 	var p parametres.ParametresEntreprise
 	if a.database == nil {
 		return p, fmt.Errorf("base de données non initialisée")
@@ -147,6 +334,9 @@ func (a *App) GetParametres() (parametres.ParametresEntreprise, error) {
 }
 
 func (a *App) ImporterLogo() (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return "", err
+	}
 	if a.database == nil {
 		return "", fmt.Errorf("base de données non initialisée")
 	}
@@ -172,6 +362,16 @@ func (a *App) ImporterLogo() (string, error) {
 	source, err := os.ReadFile(selectedPath)
 	if err != nil {
 		return "", fmt.Errorf("lecture du logo: %w", err)
+	}
+	return a.saveLogo(source)
+}
+
+func (a *App) saveLogo(source []byte) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return "", err
+	}
+	if a.database == nil {
+		return "", fmt.Errorf("base de données non initialisée")
 	}
 	if len(source) > 10<<20 {
 		return "", fmt.Errorf("le logo ne doit pas dépasser 10 Mo")
@@ -210,6 +410,9 @@ func (a *App) ImporterLogo() (string, error) {
 }
 
 func (a *App) UpdateParametres(input parametres.ModificationParametres) error {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return err
+	}
 	if a.database == nil {
 		return fmt.Errorf("base de données non initialisée")
 	}
@@ -233,6 +436,9 @@ func (a *App) UpdateParametres(input parametres.ModificationParametres) error {
 }
 
 func (a *App) SauvegarderBase(dossierDestination string) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return "", err
+	}
 	if a.database == nil {
 		return "", fmt.Errorf("base de données non initialisée")
 	}
@@ -251,6 +457,9 @@ func (a *App) SauvegarderBase(dossierDestination string) (string, error) {
 }
 
 func (a *App) CreerProduit(input produits.NouveauProduit) (produits.Produit, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return produits.Produit{}, err
+	}
 	if a.produitsStore == nil {
 		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -258,6 +467,9 @@ func (a *App) CreerProduit(input produits.NouveauProduit) (produits.Produit, err
 }
 
 func (a *App) ModifierProduit(input produits.ModificationProduit) (produits.Produit, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return produits.Produit{}, err
+	}
 	if a.produitsStore == nil {
 		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -265,6 +477,9 @@ func (a *App) ModifierProduit(input produits.ModificationProduit) (produits.Prod
 }
 
 func (a *App) SupprimerProduit(id string) error {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return err
+	}
 	if a.produitsStore == nil {
 		return fmt.Errorf("base de données non initialisée")
 	}
@@ -272,6 +487,9 @@ func (a *App) SupprimerProduit(id string) error {
 }
 
 func (a *App) GetProduitParCodeBarres(codeBarres string) (produits.Produit, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return produits.Produit{}, err
+	}
 	if a.produitsStore == nil {
 		return produits.Produit{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -279,6 +497,9 @@ func (a *App) GetProduitParCodeBarres(codeBarres string) (produits.Produit, erro
 }
 
 func (a *App) ListerProduits(filtre produits.FiltreProduits) (produits.PageProduits, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return produits.PageProduits{}, err
+	}
 	if a.produitsStore == nil {
 		return produits.PageProduits{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -286,6 +507,9 @@ func (a *App) ListerProduits(filtre produits.FiltreProduits) (produits.PageProdu
 }
 
 func (a *App) CreerMouvementStock(input stock.SaisieMouvement) (stock.MouvementStock, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return stock.MouvementStock{}, err
+	}
 	if a.stockStore == nil {
 		return stock.MouvementStock{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -293,6 +517,9 @@ func (a *App) CreerMouvementStock(input stock.SaisieMouvement) (stock.MouvementS
 }
 
 func (a *App) AjusterStock(input stock.SaisieAjustement) (stock.MouvementStock, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return stock.MouvementStock{}, err
+	}
 	if a.stockStore == nil {
 		return stock.MouvementStock{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -300,13 +527,29 @@ func (a *App) AjusterStock(input stock.SaisieAjustement) (stock.MouvementStock, 
 }
 
 func (a *App) ListerMouvementsStock(filtre stock.FiltreMouvements) (stock.PageMouvements, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return stock.PageMouvements{}, err
+	}
 	if a.stockStore == nil {
 		return stock.PageMouvements{}, fmt.Errorf("base de données non initialisée")
 	}
 	return a.stockStore.List(filtre)
 }
 
+func (a *App) SupprimerMouvementStock(id string) error {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return err
+	}
+	if a.stockStore == nil {
+		return fmt.Errorf("base de données non initialisée")
+	}
+	return a.stockStore.SupprimerMouvement(id)
+}
+
 func (a *App) ObtenirAlertesStock() ([]stock.AlerteStock, error) {
+	if err := a.requireRoles(auth.RoleAdmin); err != nil {
+		return nil, err
+	}
 	if a.stockStore == nil {
 		return nil, fmt.Errorf("base de données non initialisée")
 	}
@@ -314,6 +557,9 @@ func (a *App) ObtenirAlertesStock() ([]stock.AlerteStock, error) {
 }
 
 func (a *App) CreerFacture(input factures.NouvelleFacture) (factures.DetailFacture, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.DetailFacture{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.DetailFacture{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -322,7 +568,7 @@ func (a *App) CreerFacture(input factures.NouvelleFacture) (factures.DetailFactu
 		return detail, err
 	}
 
-	settings, err := a.GetParametres()
+	settings, err := a.getParametres()
 	if err != nil {
 		return detail, fmt.Errorf("recuperation du logo: %w", err)
 	}
@@ -335,6 +581,9 @@ func (a *App) CreerFacture(input factures.NouvelleFacture) (factures.DetailFactu
 }
 
 func (a *App) GetFacture(id string) (factures.DetailFacture, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.DetailFacture{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.DetailFacture{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -342,6 +591,9 @@ func (a *App) GetFacture(id string) (factures.DetailFacture, error) {
 }
 
 func (a *App) ListerFactures(filtre factures.FiltreFactures) (factures.PageFactures, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.PageFactures{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.PageFactures{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -349,6 +601,23 @@ func (a *App) ListerFactures(filtre factures.FiltreFactures) (factures.PageFactu
 }
 
 func (a *App) ImprimerFacturePDF(id string) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return "", err
+	}
+	pdfPath, err := a.genererFacturePDF(id)
+	if err != nil {
+		return "", err
+	}
+	if err := exec.Command("cmd", "/c", "start", "", pdfPath).Start(); err != nil {
+		return "", fmt.Errorf("ouverture du PDF: %w", err)
+	}
+	return pdfPath, nil
+}
+
+func (a *App) genererFacturePDF(id string) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return "", err
+	}
 	if a.facturesStore == nil {
 		return "", fmt.Errorf("base de données non initialisée")
 	}
@@ -357,7 +626,7 @@ func (a *App) ImprimerFacturePDF(id string) (string, error) {
 		return "", err
 	}
 
-	settings, err := a.GetParametres()
+	settings, err := a.getParametres()
 	if err != nil {
 		return "", fmt.Errorf("recuperation du logo: %w", err)
 	}
@@ -365,13 +634,13 @@ func (a *App) ImprimerFacturePDF(id string) (string, error) {
 	if err := factures.GenererFacturePDF(detail, settings.LogoPath, pdfPath); err != nil {
 		return "", fmt.Errorf("generation pdf: %w", err)
 	}
-
-	_ = exec.Command("cmd", "/c", "start", "", pdfPath).Start()
-
 	return pdfPath, nil
 }
 
 func (a *App) CreerBon(input factures.NouveauBon) (factures.DetailBon, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.DetailBon{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.DetailBon{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -380,7 +649,7 @@ func (a *App) CreerBon(input factures.NouveauBon) (factures.DetailBon, error) {
 		return detail, err
 	}
 
-	settings, err := a.GetParametres()
+	settings, err := a.getParametres()
 	if err != nil {
 		return detail, fmt.Errorf("recuperation du logo: %w", err)
 	}
@@ -393,6 +662,9 @@ func (a *App) CreerBon(input factures.NouveauBon) (factures.DetailBon, error) {
 }
 
 func (a *App) GetBon(id string) (factures.DetailBon, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.DetailBon{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.DetailBon{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -400,6 +672,9 @@ func (a *App) GetBon(id string) (factures.DetailBon, error) {
 }
 
 func (a *App) ListerBons(filtre factures.FiltreBons) (factures.PageBons, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return factures.PageBons{}, err
+	}
 	if a.facturesStore == nil {
 		return factures.PageBons{}, fmt.Errorf("base de données non initialisée")
 	}
@@ -407,6 +682,23 @@ func (a *App) ListerBons(filtre factures.FiltreBons) (factures.PageBons, error) 
 }
 
 func (a *App) ImprimerBonPDF(id string) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return "", err
+	}
+	pdfPath, err := a.genererBonPDF(id)
+	if err != nil {
+		return "", err
+	}
+	if err := exec.Command("cmd", "/c", "start", "", pdfPath).Start(); err != nil {
+		return "", fmt.Errorf("ouverture du PDF: %w", err)
+	}
+	return pdfPath, nil
+}
+
+func (a *App) genererBonPDF(id string) (string, error) {
+	if err := a.requireRoles(auth.RoleAdmin, auth.RoleUser); err != nil {
+		return "", err
+	}
 	if a.facturesStore == nil {
 		return "", fmt.Errorf("base de données non initialisée")
 	}
@@ -415,7 +707,7 @@ func (a *App) ImprimerBonPDF(id string) (string, error) {
 		return "", err
 	}
 
-	settings, err := a.GetParametres()
+	settings, err := a.getParametres()
 	if err != nil {
 		return "", fmt.Errorf("recuperation du logo: %w", err)
 	}
@@ -423,8 +715,53 @@ func (a *App) ImprimerBonPDF(id string) (string, error) {
 	if err := factures.GenererBonPDF(detail, settings.LogoPath, pdfPath); err != nil {
 		return "", fmt.Errorf("generation pdf bon: %w", err)
 	}
-
-	_ = exec.Command("cmd", "/c", "start", "", pdfPath).Start()
-
 	return pdfPath, nil
+}
+
+func (a *App) LancerPaiementTPE(montant float64, reference string) models.ReponsePaiement {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	return a.tpeService.LancerPaiement(montant, reference)
+}
+
+func (a *App) AnnulerPaiementTPE() {
+	if a.tpeService != nil {
+		a.tpeService.AnnulerPaiementEnCours()
+	}
+}
+
+func (a *App) TesterConnexionTPE() models.ResultatTestConnexion {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	return a.tpeService.TesterConnexion()
+}
+
+func (a *App) GetConfigTPE() models.ConfigTPE {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	return a.tpeService.GetConfig()
+}
+
+func (a *App) SauvegarderConfigTPE(cfg models.ConfigTPE) error {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	return a.tpeService.SauvegarderConfig(cfg)
+}
+
+func (a *App) ListerPortsCOMTPE() []string {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	return a.tpeService.ListerPortsCOM()
+}
+
+func (a *App) SetSimulateurScenarioTPE(scenario string) {
+	if a.tpeService == nil {
+		a.tpeService = services.NewTPEService(a.dataDir)
+	}
+	a.tpeService.SetSimulateurScenario(scenario)
 }

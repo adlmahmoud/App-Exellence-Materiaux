@@ -8,7 +8,7 @@
     ImprimerBonPDF,
     CreerBon,
     ListerProduits
-  } from '../../wailsjs/go/main/App.js';
+  } from '../lib/api.js';
 
   let ongletActif = 'factures';
   let factures = [];
@@ -496,7 +496,7 @@
         <div class="form-row">
           <div class="form-group flex-2">
             <label>Adresse complète :</label>
-            <input type="text" placeholder="Ex: 12 Rue du Progrès, 95500 Gonesse" bind:value={formFacture.clientAdresse} />
+            <input type="text" placeholder="Ex: 12 Rue du Progrès, 75001 Paris" bind:value={formFacture.clientAdresse} />
           </div>
           <div class="form-group flex-1">
             <label>Mode de règlement :</label>

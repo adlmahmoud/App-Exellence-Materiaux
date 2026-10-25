@@ -39,3 +39,23 @@ func TestResolveDataDirCreatesUserDataDirectory(t *testing.T) {
 		t.Fatalf("user data directory was not created: %v", err)
 	}
 }
+
+func TestRolePermissions(t *testing.T) {
+	app := &App{}
+	if err := app.requireRoles("admin"); err == nil {
+		t.Fatal("unauthenticated session was granted access")
+	}
+
+	app.currentRole = "user"
+	if err := app.requireRoles("admin"); err == nil {
+		t.Fatal("user role was granted admin access")
+	}
+	if err := app.requireRoles("admin", "user"); err != nil {
+		t.Fatalf("user role was denied cashier access: %v", err)
+	}
+
+	app.currentRole = "admin"
+	if err := app.requireRoles("admin"); err != nil {
+		t.Fatalf("admin role was denied admin access: %v", err)
+	}
+}

@@ -1,12 +1,15 @@
 <script>
+  import { onMount } from 'svelte';
   import {
     GetProduitParCodeBarres,
     ListerProduits,
     CreerFacture,
     ImprimerFacturePDF,
     CreerBon,
-    ImprimerBonPDF
-  } from '../../wailsjs/go/main/App.js';
+    ImprimerBonPDF,
+    LancerPaiementTPE,
+    AnnulerPaiementTPE
+  } from '../lib/api.js';
 
   let codeBarresSaisi = '';
   let panier = [];
@@ -14,8 +17,18 @@
   let messageSucces = '';
   let inputScanElement;
 
+  let modalTPE = false;
+  let statutTPE = 'EN_COURS';
+  let messageTPE = '';
+  let detailTPE = null;
+
   let suggestions = [];
   let timerSuggestions;
+  let scanBuffer = '';
+  let scanStartedAt = 0;
+  let scanLastKeyAt = 0;
+  let scanTarget;
+  let scanTargetValue = '';
 
   let clientNom = 'Client Comptoir';
   let modeReglement = 'especes';
@@ -24,6 +37,22 @@
   $: totalHT = panier.reduce((acc, item) => acc + (item.prixVenteHt * item.quantite), 0);
   $: totalTTC = panier.reduce((acc, item) => acc + (item.prixVenteTtc * item.quantite), 0);
   $: totalTVA = totalTTC - totalHT;
+
+  onMount(() => {
+    focusScanInput();
+    const handleWindowFocus = () => focusScanInput();
+    document.addEventListener('keydown', capturerScanGlobal, true);
+    window.addEventListener('focus', handleWindowFocus);
+    return () => {
+      document.removeEventListener('keydown', capturerScanGlobal, true);
+      window.removeEventListener('focus', handleWindowFocus);
+      clearTimeout(timerSuggestions);
+    };
+  });
+
+  function focusScanInput() {
+    inputScanElement?.focus();
+  }
 
   function onInputScan() {
     clearTimeout(timerSuggestions);
@@ -50,32 +79,80 @@
   }
 
   async function scannerOuValider(e) {
-    if (e.key === 'Enter') {
-      const code = codeBarresSaisi.trim();
-      if (!code) return;
-      messageErreur = '';
-      messageSucces = '';
+    if (e.key === 'Escape') {
       suggestions = [];
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== 'Tab') return;
 
+    e.preventDefault();
+    if (e.repeat) return;
+    const code = codeBarresSaisi.trim();
+    if (!code) return;
+    clearTimeout(timerSuggestions);
+    await traiterCodeBarres(code);
+  }
+
+  function capturerScanGlobal(e) {
+    if (document.activeElement === inputScanElement || e.ctrlKey || e.altKey || e.metaKey) return;
+
+    const maintenant = e.timeStamp;
+    if ((e.key === 'Enter' || e.key === 'Tab') && scanBuffer.length >= 6 && maintenant - scanStartedAt <= 2000) {
+      e.preventDefault();
+      e.stopPropagation();
+      const code = scanBuffer;
+      if (scanTarget && typeof scanTarget.value === 'string' && scanTarget.value.endsWith(code)) {
+        scanTarget.value = scanTargetValue;
+        scanTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      scanBuffer = '';
+      scanTarget = null;
+      void traiterCodeBarres(code);
+      return;
+    }
+
+    if (e.key.length !== 1) {
+      scanBuffer = '';
+      scanTarget = null;
+      return;
+    }
+    if (scanLastKeyAt && maintenant - scanLastKeyAt > 100) {
+      scanBuffer = '';
+      scanTarget = null;
+    }
+    if (scanBuffer.length === 0) {
+      scanStartedAt = maintenant;
+      scanTarget = e.target;
+      scanTargetValue = typeof e.target?.value === 'string' ? e.target.value : '';
+    }
+    scanBuffer += e.key;
+    scanLastKeyAt = maintenant;
+  }
+
+  async function traiterCodeBarres(code) {
+    if (!code) return;
+    clearTimeout(timerSuggestions);
+    messageErreur = '';
+    messageSucces = '';
+    suggestions = [];
+    codeBarresSaisi = '';
+
+    try {
+      const prod = await GetProduitParCodeBarres(code);
+      ajouterAuPanier(prod);
+    } catch (err) {
       try {
-        const prod = await GetProduitParCodeBarres(code);
-        ajouterAuPanier(prod);
-        codeBarresSaisi = '';
-      } catch (err) {
-        try {
-          const res = await ListerProduits({ recherche: code, limit: 1 });
-          if (res && res.produits && res.produits.length > 0) {
-            ajouterAuPanier(res.produits[0]);
-            codeBarresSaisi = '';
-          } else {
-            messageErreur = 'Aucun produit trouvé pour : ' + code;
-          }
-        } catch (e2) {
+        const res = await ListerProduits({ recherche: code, limit: 1 });
+        if (res && res.produits && res.produits.length > 0) {
+          ajouterAuPanier(res.produits[0]);
+        } else {
           messageErreur = 'Aucun produit trouvé pour : ' + code;
         }
+      } catch (e2) {
+        messageErreur = 'Aucun produit trouvé pour : ' + code;
       }
-    } else if (e.key === 'Escape') {
-      suggestions = [];
+    } finally {
+      focusScanInput();
     }
   }
 
@@ -124,6 +201,57 @@
 
   async function validerEtFacturer() {
     if (panier.length === 0) return;
+    if (modeReglement === 'cb') {
+      await demarrerPaiementTPE();
+      return;
+    }
+    await finaliserFacturation();
+  }
+
+  async function demarrerPaiementTPE() {
+    statutTPE = 'EN_COURS';
+    messageTPE = 'Envoi du montant au terminal de paiement...';
+    detailTPE = null;
+    modalTPE = true;
+
+    try {
+      const montantEuros = totalTTC / 100;
+      const res = await LancerPaiementTPE(montantEuros, 'VENTE');
+      detailTPE = res;
+
+      if (res.statut === 'VALIDE') {
+        statutTPE = 'VALIDE';
+        messageTPE = res.message || 'Paiement accepté !';
+        setTimeout(async () => {
+          modalTPE = false;
+          await finaliserFacturation();
+        }, 1200);
+      } else if (res.statut === 'REFUSE') {
+        statutTPE = 'REFUSE';
+        messageTPE = res.message || 'Paiement refusé par la banque';
+      } else {
+        statutTPE = 'ANNULE';
+        messageTPE = res.message || 'Transaction annulée sur le terminal';
+      }
+    } catch (err) {
+      statutTPE = 'ANNULE';
+      messageTPE = 'Erreur terminal : ' + err;
+    }
+  }
+
+  async function annulerTPEEtFermer() {
+    try {
+      await AnnulerPaiementTPE();
+    } catch (e) {}
+    modalTPE = false;
+  }
+
+  function changerModeEtFermer(nouveauMode) {
+    modalTPE = false;
+    modeReglement = nouveauMode;
+  }
+
+  async function finaliserFacturation() {
     chargementPaiement = true;
     messageErreur = '';
     messageSucces = '';
@@ -213,6 +341,7 @@
         bind:this={inputScanElement}
         on:input={onInputScan}
         on:keydown={scannerOuValider}
+        on:click={focusScanInput}
       />
       {#if suggestions.length > 0}
         <div class="suggestions-dropdown">
@@ -362,6 +491,80 @@
       </button>
     </div>
   </div>
+
+  {#if modalTPE}
+    <div class="modal-tpe-overlay">
+      <div class="modal-tpe-card">
+        <div class="modal-tpe-header">
+          <h3>💳 Paiement par Carte Bancaire (TPE)</h3>
+        </div>
+        <div class="modal-tpe-body">
+          <div class="tpe-montant-box">
+            <span class="tpe-montant-label">Montant envoyé au terminal :</span>
+            <span class="tpe-montant-val">{(totalTTC / 100).toFixed(2)} €</span>
+          </div>
+
+          {#if statutTPE === 'EN_COURS'}
+            <div class="tpe-box en-cours">
+              <div class="tpe-spinner"></div>
+              <h4>Transaction en cours sur le TPE...</h4>
+              <p>Le client doit insérer sa carte ou utiliser le sans contact sur le terminal.</p>
+              <span class="tpe-msg">{messageTPE}</span>
+            </div>
+            <button class="btn-tpe-cancel" on:click={annulerTPEEtFermer}>
+              Annuler depuis la caisse
+            </button>
+          {:else if statutTPE === 'VALIDE'}
+            <div class="tpe-box valide">
+              <div class="tpe-icon">✅</div>
+              <h4>Paiement Validé !</h4>
+              <p>{messageTPE}</p>
+              {#if detailTPE && detailTPE.numeroAutorisation}
+                <div class="tpe-badge-auth">Autorisation : {detailTPE.numeroAutorisation}</div>
+              {/if}
+              <span class="tpe-msg">Validation et création de la facture en cours...</span>
+            </div>
+          {:else if statutTPE === 'REFUSE'}
+            <div class="tpe-box refuse">
+              <div class="tpe-icon">❌</div>
+              <h4>Transaction Refusée par la banque</h4>
+              <p>{messageTPE}</p>
+              <small>Motif : Solde insuffisant, code PIN erroné ou plafond dépassé</small>
+            </div>
+            <div class="tpe-actions">
+              <button class="btn-tpe-retry" on:click={demarrerPaiementTPE}>
+                🔄 Recommencer sur le TPE
+              </button>
+              <button class="btn-tpe-cash" on:click={() => changerModeEtFermer('especes')}>
+                💵 Payer en Espèces
+              </button>
+              <button class="btn-tpe-close" on:click={() => modalTPE = false}>
+                Fermer
+              </button>
+            </div>
+          {:else}
+            <div class="tpe-box annule">
+              <div class="tpe-icon">⚠️</div>
+              <h4>Transaction Annulée</h4>
+              <p>{messageTPE}</p>
+              <small>Annulation par le client sur le TPE ou abandon</small>
+            </div>
+            <div class="tpe-actions">
+              <button class="btn-tpe-retry" on:click={demarrerPaiementTPE}>
+                🔄 Réessayer le paiement CB
+              </button>
+              <button class="btn-tpe-cash" on:click={() => changerModeEtFermer('especes')}>
+                💵 Payer en Espèces
+              </button>
+              <button class="btn-tpe-close" on:click={() => modalTPE = false}>
+                Fermer
+              </button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -688,5 +891,183 @@
     background: #fef2f2;
     color: #991b1b;
     border: 1px solid #fecaca;
+  }
+  .modal-tpe-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(3px);
+  }
+  .modal-tpe-card {
+    background: #ffffff;
+    width: 90%;
+    max-width: 480px;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+  .modal-tpe-header {
+    background: #0f172a;
+    color: white;
+    padding: 16px 20px;
+  }
+  .modal-tpe-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .modal-tpe-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .tpe-montant-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tpe-montant-label {
+    font-size: 0.95rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+  .tpe-montant-val {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0284c7;
+  }
+  .tpe-box {
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .tpe-box.en-cours {
+    background: #f0f9ff;
+    border: 2px solid #bae6fd;
+    color: #0369a1;
+  }
+  .tpe-box.valide {
+    background: #ecfdf5;
+    border: 2px solid #a7f3d0;
+    color: #065f46;
+  }
+  .tpe-box.refuse {
+    background: #fef2f2;
+    border: 2px solid #fecaca;
+    color: #991b1b;
+  }
+  .tpe-box.annule {
+    background: #fffbeb;
+    border: 2px solid #fde68a;
+    color: #92400e;
+  }
+  .tpe-spinner {
+    width: 44px;
+    height: 44px;
+    border: 4px solid #bae6fd;
+    border-top-color: #0284c7;
+    border-radius: 50%;
+    animation: spinTPE 0.8s linear infinite;
+    margin-bottom: 6px;
+  }
+  @keyframes spinTPE {
+    to { transform: rotate(360deg); }
+  }
+  .tpe-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+  }
+  .tpe-box h4 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .tpe-box p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .tpe-msg {
+    font-size: 0.8rem;
+    opacity: 0.85;
+  }
+  .tpe-badge-auth {
+    background: #059669;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .btn-tpe-cancel {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn-tpe-cancel:hover {
+    background: #fecaca;
+  }
+  .tpe-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .btn-tpe-retry {
+    background: #16a34a;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  .btn-tpe-retry:hover {
+    background: #15803d;
+  }
+  .btn-tpe-cash {
+    background: #0284c7;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-tpe-cash:hover {
+    background: #0369a1;
+  }
+  .btn-tpe-close {
+    background: #e2e8f0;
+    color: #475569;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-tpe-close:hover {
+    background: #cbd5e1;
   }
 </style>

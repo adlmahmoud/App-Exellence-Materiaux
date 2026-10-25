@@ -1,6 +1,16 @@
 <script>
-  import { GetParametres, ImporterLogo, SauvegarderBase } from '../../wailsjs/go/main/App.js';
+  import { API } from '../lib/api.js';
   import { onMount } from 'svelte';
+  const {
+    ChangeAccessPasswords,
+    GetParametres,
+    ImporterLogo,
+    SauvegarderBase,
+    GetConfigTPE,
+    SauvegarderConfigTPE,
+    TesterConnexionTPE,
+    ListerPortsCOMTPE
+  } = API;
 
   let params = {
     denomination: '',
@@ -26,6 +36,27 @@
   let chargement = true;
   let message = '';
   let messageErreur = '';
+  let currentAdminPassword = '';
+  let newAdminPassword = '';
+  let confirmAdminPassword = '';
+  let newUserPassword = '';
+  let confirmUserPassword = '';
+
+  let configTPE = {
+    mode: 'simulateur',
+    portCom: 'COM1',
+    baudRate: 9600,
+    adresseIp: '192.168.1.50',
+    portReseau: 8888,
+    timeoutSec: 45,
+    simulateurScenario: 'succes',
+    simulateurDelaiSec: 2
+  };
+  let portsCOM = [];
+  let testTPEResultat = null;
+  let testTPEEnCours = false;
+  let tpeMessage = '';
+  let tpeMessageErreur = '';
 
   onMount(async () => {
     try {
@@ -33,12 +64,50 @@
       if (res) {
         params = { ...params, ...res };
       }
+      const cfg = await GetConfigTPE();
+      if (cfg && cfg.mode) {
+        configTPE = { ...configTPE, ...cfg };
+      }
+      portsCOM = (await ListerPortsCOMTPE()) || [];
     } catch (err) {
       messageErreur = 'Erreur lors du chargement des paramètres.';
     } finally {
       chargement = false;
     }
   });
+
+  async function testerTPE() {
+    testTPEEnCours = true;
+    testTPEResultat = null;
+    tpeMessage = '';
+    tpeMessageErreur = '';
+    try {
+      await SauvegarderConfigTPE(configTPE);
+      const res = await TesterConnexionTPE();
+      testTPEResultat = res;
+    } catch (e) {
+      tpeMessageErreur = 'Erreur test TPE: ' + e;
+    } finally {
+      testTPEEnCours = false;
+    }
+  }
+
+  async function enregistrerTPE() {
+    tpeMessage = '';
+    tpeMessageErreur = '';
+    try {
+      await SauvegarderConfigTPE(configTPE);
+      tpeMessage = 'Configuration du TPE enregistrée avec succès !';
+    } catch (e) {
+      tpeMessageErreur = 'Erreur sauvegarde TPE: ' + e;
+    }
+  }
+
+  async function actualiserPortsCOM() {
+    try {
+      portsCOM = (await ListerPortsCOMTPE()) || [];
+    } catch (e) {}
+  }
 
   async function faireSauvegarde() {
     message = '';
@@ -48,6 +117,35 @@
       message = 'Sauvegarde créée avec succès : ' + res;
     } catch (err) {
       messageErreur = 'Erreur de sauvegarde : ' + err;
+    }
+  }
+
+  async function changerMotsDePasse() {
+    message = '';
+    messageErreur = '';
+    if (newAdminPassword.length < 8 || newUserPassword.length < 8) {
+      messageErreur = 'Chaque nouveau mot de passe doit contenir au moins 8 caractères.';
+      return;
+    }
+    if (newAdminPassword === newUserPassword) {
+      messageErreur = 'Les mots de passe administrateur et utilisateur doivent être différents.';
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword || newUserPassword !== confirmUserPassword) {
+      messageErreur = 'Les confirmations des mots de passe ne correspondent pas.';
+      return;
+    }
+
+    try {
+      await ChangeAccessPasswords(currentAdminPassword, newAdminPassword, newUserPassword);
+      currentAdminPassword = '';
+      newAdminPassword = '';
+      confirmAdminPassword = '';
+      newUserPassword = '';
+      confirmUserPassword = '';
+      message = 'Les mots de passe ont été modifiés.';
+    } catch (err) {
+      messageErreur = String(err);
     }
   }
 
@@ -85,6 +183,33 @@
     {#if messageErreur}
       <div class="alert error">{messageErreur}</div>
     {/if}
+
+    <form class="card access-card" on:submit|preventDefault={changerMotsDePasse}>
+      <h2>Accès administrateur et utilisateur</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="current-admin-password">Mot de passe administrateur actuel :</label>
+          <input id="current-admin-password" type="password" bind:value={currentAdminPassword} autocomplete="current-password" required />
+        </div>
+        <div class="form-group">
+          <label for="new-admin-password">Nouveau mot de passe administrateur :</label>
+          <input id="new-admin-password" type="password" minlength="8" bind:value={newAdminPassword} autocomplete="new-password" required />
+        </div>
+        <div class="form-group">
+          <label for="confirm-admin-password">Confirmer le mot de passe administrateur :</label>
+          <input id="confirm-admin-password" type="password" minlength="8" bind:value={confirmAdminPassword} autocomplete="new-password" required />
+        </div>
+        <div class="form-group">
+          <label for="new-user-password">Nouveau mot de passe utilisateur :</label>
+          <input id="new-user-password" type="password" minlength="8" bind:value={newUserPassword} autocomplete="new-password" required />
+        </div>
+        <div class="form-group">
+          <label for="confirm-user-password">Confirmer le mot de passe utilisateur :</label>
+          <input id="confirm-user-password" type="password" minlength="8" bind:value={confirmUserPassword} autocomplete="new-password" required />
+        </div>
+      </div>
+      <button class="btn-backup" type="submit">Modifier les mots de passe</button>
+    </form>
 
     <div class="grid">
       <div class="card">
@@ -173,6 +298,144 @@
             <p>Crée une copie instantanée et sécurisée de la base de données.</p>
           </div>
           <button class="btn-backup" on:click={faireSauvegarde}>Sauvegarder la base</button>
+        </div>
+      </div>
+
+      <div class="card full-width">
+        <h2>💳 Terminal de Paiement Électronique (TPE)</h2>
+        <p class="section-desc">Configuration universelle du terminal de paiement par carte bancaire branché en physique ou en réseau.</p>
+
+        {#if tpeMessage}
+          <div class="alert success">{tpeMessage}</div>
+        {/if}
+        {#if tpeMessageErreur}
+          <div class="alert error">{tpeMessageErreur}</div>
+        {/if}
+
+        <div class="form-group">
+          <label>Mode de connexion au TPE :</label>
+          <div class="tpe-mode-selector">
+            <button
+              type="button"
+              class="btn-mode {configTPE.mode === 'simulateur' ? 'active' : ''}"
+              on:click={() => configTPE.mode = 'simulateur'}
+            >
+              🧪 Simulateur / Test (Sans matériel physique)
+            </button>
+            <button
+              type="button"
+              class="btn-mode {configTPE.mode === 'serie' ? 'active' : ''}"
+              on:click={() => configTPE.mode = 'serie'}
+            >
+              🔌 Câble USB / Série (Port COM)
+            </button>
+            <button
+              type="button"
+              class="btn-mode {configTPE.mode === 'reseau' ? 'active' : ''}"
+              on:click={() => configTPE.mode = 'reseau'}
+            >
+              🌐 Réseau Local (Ethernet / IP)
+            </button>
+          </div>
+        </div>
+
+        {#if configTPE.mode === 'simulateur'}
+          <div class="tpe-settings-panel">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Résultat simulé lors des encaissements en caisse :</label>
+                <select bind:value={configTPE.simulateurScenario}>
+                  <option value="succes">✅ Paiement Validé (Succès immédiat)</option>
+                  <option value="refus">❌ Paiement Refusé par la banque</option>
+                  <option value="annulation">⚠️ Transaction Annulée sur le TPE</option>
+                  <option value="aleatoire">🎲 Aléatoire (Réaliste)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Délai de simulation (secondes) :</label>
+                <input type="number" min="1" max="10" bind:value={configTPE.simulateurDelaiSec} />
+              </div>
+            </div>
+            <p class="tpe-info-box">
+              ℹ️ Ce mode vous permet de tester immédiatement tous les scénarios (validation, refus, annulation) sans aucun TPE branché.
+            </p>
+          </div>
+        {:else if configTPE.mode === 'serie'}
+          <div class="tpe-settings-panel">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Port COM :</label>
+                <div class="com-row">
+                  {#if portsCOM.length > 0}
+                    <select bind:value={configTPE.portCom}>
+                      {#each portsCOM as p}
+                        <option value={p}>{p}</option>
+                      {/each}
+                    </select>
+                  {:else}
+                    <input type="text" bind:value={configTPE.portCom} placeholder="ex: COM3" />
+                  {/if}
+                  <button type="button" class="btn-refresh" on:click={actualiserPortsCOM} title="Actualiser les ports">
+                    🔄
+                  </button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Vitesse (BaudRate) :</label>
+                <select bind:value={configTPE.baudRate}>
+                  <option value={9600}>9600 bauds (Standard Concert)</option>
+                  <option value={19200}>19200 bauds</option>
+                  <option value={38400}>38400 bauds</option>
+                  <option value={115200}>115200 bauds (PAX / USB rapide)</option>
+                </select>
+              </div>
+            </div>
+            <p class="tpe-info-box">
+              🔌 Protocole Concert V3 / CB PR V3.0 (Ingenico Desk/Move, PAX, Verifone reliés en USB).
+            </p>
+          </div>
+        {:else}
+          <div class="tpe-settings-panel">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Adresse IP du TPE :</label>
+                <input type="text" bind:value={configTPE.adresseIp} placeholder="ex: 192.168.1.50" />
+              </div>
+              <div class="form-group">
+                <label>Port réseau :</label>
+                <input type="number" bind:value={configTPE.portReseau} placeholder="8888" />
+              </div>
+            </div>
+            <p class="tpe-info-box">
+              🌐 Protocole Concert sur socket TCP (TPE relié en câble Ethernet à votre box ou switch).
+            </p>
+          </div>
+        {/if}
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Délai d'attente maximum (secondes) :</label>
+            <input type="number" min="15" max="120" bind:value={configTPE.timeoutSec} />
+          </div>
+        </div>
+
+        {#if testTPEResultat}
+          <div class="alert {testTPEResultat.succes ? 'success' : 'error'}">
+            <strong>{testTPEResultat.succes ? '✅ Connexion réussie :' : '❌ Échec de connexion :'}</strong>
+            <span>{testTPEResultat.message}</span>
+            {#if testTPEResultat.details}
+              <div style="font-size:0.85rem; margin-top:4px;">{testTPEResultat.details}</div>
+            {/if}
+          </div>
+        {/if}
+
+        <div class="tpe-footer-buttons">
+          <button type="button" class="btn-test-tpe" on:click={testerTPE} disabled={testTPEEnCours}>
+            {testTPEEnCours ? 'Test en cours...' : '🔍 Tester la communication avec le TPE'}
+          </button>
+          <button type="button" class="btn-save-tpe" on:click={enregistrerTPE}>
+            💾 Enregistrer la configuration TPE
+          </button>
         </div>
       </div>
     </div>
@@ -312,5 +575,92 @@
     background: #fef2f2;
     color: #991b1b;
     border: 1px solid #fecaca;
+  }
+  .section-desc {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: -8px;
+    margin-bottom: 16px;
+  }
+  .tpe-mode-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .btn-mode {
+    background: #f8fafc;
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .btn-mode.active {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #166534;
+  }
+  .tpe-settings-panel {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .tpe-info-box {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    color: #475569;
+  }
+  .com-row {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-refresh {
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+  }
+  .tpe-footer-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .btn-test-tpe {
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn-test-tpe:hover:not(:disabled) {
+    background: #0369a1;
+  }
+  .btn-test-tpe:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-save-tpe {
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn-save-tpe:hover {
+    background: #15803d;
   }
 </style>

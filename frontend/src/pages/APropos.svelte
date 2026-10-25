@@ -1,6 +1,7 @@
 <script>
   import logo from '../assets/images/gestion-stock.png';
-  import { GetAPropos } from '../../wailsjs/go/main/App.js';
+  import { API } from '../lib/api.js';
+  const { GetAPropos } = API;
   import { onMount } from 'svelte';
 
   export let visible = false;

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { ListerProduits, CreerProduit, ModifierProduit, SupprimerProduit } from '../../wailsjs/go/main/App.js';
+  import { API } from '../lib/api.js';
+  const { ListerProduits, CreerProduit, ModifierProduit, SupprimerProduit } = API;
 
   let produits = [];
   let total = 0;

@@ -179,6 +179,27 @@ func (s *Store) GetByID(id string) (MouvementStock, error) {
 	return m, nil
 }
 
+func (s *Store) SupprimerMouvement(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("identifiant du mouvement non spécifié")
+	}
+
+	result, err := s.db.Exec("DELETE FROM mouvements_stock WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("supprimer mouvement: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("vérifier la suppression du mouvement: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("mouvement introuvable")
+	}
+	return nil
+}
+
 func (s *Store) List(filter FiltreMouvements) (PageMouvements, error) {
 	page := filter.Page
 	if page < 1 {

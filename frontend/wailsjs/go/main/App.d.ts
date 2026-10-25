@@ -3,9 +3,15 @@
 import {stock} from '../models';
 import {factures} from '../models';
 import {produits} from '../models';
+import {models} from '../models';
+import {main} from '../models';
 import {parametres} from '../models';
 
 export function AjusterStock(arg1:stock.SaisieAjustement):Promise<stock.MouvementStock>;
+
+export function AnnulerPaiementTPE():Promise<void>;
+
+export function ChangeAccessPasswords(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CreerBon(arg1:factures.NouveauBon):Promise<factures.DetailBon>;
 
@@ -17,13 +23,23 @@ export function CreerProduit(arg1:produits.NouveauProduit):Promise<produits.Prod
 
 export function GetAPropos():Promise<Record<string, string>>;
 
+export function GetAuthStatus():Promise<boolean>;
+
 export function GetBon(arg1:string):Promise<factures.DetailBon>;
 
+export function GetConfigTPE():Promise<models.ConfigTPE>;
+
+export function GetCurrentRole():Promise<string>;
+
 export function GetFacture(arg1:string):Promise<factures.DetailFacture>;
+
+export function GetNetworkConfig():Promise<main.NetworkConfig>;
 
 export function GetParametres():Promise<parametres.ParametresEntreprise>;
 
 export function GetProduitParCodeBarres(arg1:string):Promise<produits.Produit>;
+
+export function GetServerInfo():Promise<main.ServerInfo>;
 
 export function ImporterLogo():Promise<string>;
 
@@ -31,13 +47,21 @@ export function ImprimerBonPDF(arg1:string):Promise<string>;
 
 export function ImprimerFacturePDF(arg1:string):Promise<string>;
 
+export function LancerPaiementTPE(arg1:number,arg2:string):Promise<models.ReponsePaiement>;
+
 export function ListerBons(arg1:factures.FiltreBons):Promise<factures.PageBons>;
 
 export function ListerFactures(arg1:factures.FiltreFactures):Promise<factures.PageFactures>;
 
 export function ListerMouvementsStock(arg1:stock.FiltreMouvements):Promise<stock.PageMouvements>;
 
+export function ListerPortsCOMTPE():Promise<Array<string>>;
+
 export function ListerProduits(arg1:produits.FiltreProduits):Promise<produits.PageProduits>;
+
+export function Login(arg1:string,arg2:string):Promise<void>;
+
+export function Logout():Promise<void>;
 
 export function ModifierProduit(arg1:produits.ModificationProduit):Promise<produits.Produit>;
 
@@ -45,6 +69,18 @@ export function ObtenirAlertesStock():Promise<Array<stock.AlerteStock>>;
 
 export function SauvegarderBase(arg1:string):Promise<string>;
 
+export function SauvegarderConfigTPE(arg1:models.ConfigTPE):Promise<void>;
+
+export function SetNetworkMode(arg1:string,arg2:string):Promise<void>;
+
+export function SetSimulateurScenarioTPE(arg1:string):Promise<void>;
+
+export function SetupAccessPasswords(arg1:string,arg2:string):Promise<void>;
+
+export function SupprimerMouvementStock(arg1:string):Promise<void>;
+
 export function SupprimerProduit(arg1:string):Promise<void>;
+
+export function TesterConnexionTPE():Promise<models.ResultatTestConnexion>;
 
 export function UpdateParametres(arg1:parametres.ModificationParametres):Promise<void>;

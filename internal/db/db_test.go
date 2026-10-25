@@ -48,6 +48,19 @@ func TestOpenAndPragmas(t *testing.T) {
 		t.Errorf("expected migration version 1, got %d", version)
 	}
 
+	var authMigration int
+	if err := database.QueryRow("SELECT version FROM schema_migrations WHERE version = 2").Scan(&authMigration); err != nil {
+		t.Fatalf("query migration 2: %v", err)
+	}
+	if authMigration != 2 {
+		t.Errorf("expected migration version 2, got %d", authMigration)
+	}
+
+	var authTable string
+	if err := database.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_credentials'").Scan(&authTable); err != nil {
+		t.Fatalf("query auth_credentials table: %v", err)
+	}
+
 	var count int
 	err = database.QueryRow("SELECT COUNT(*) FROM parametres_entreprise").Scan(&count)
 	if err != nil {
