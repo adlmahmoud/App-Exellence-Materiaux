@@ -43,8 +43,8 @@ type App struct {
 	rpcSessions      map[string]rpcSession
 	produitsStore    *produits.Store
 	stockStore       *stock.Store
-	facturesStore    *factures.Store
-	tpeService       *services.TPEService
+	facturesStore         *factures.Store
+	tpeService            *services.TPEService
 }
 
 type rpcSession struct {
@@ -141,12 +141,7 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	if a.networkConfig.Mode == "server" {
-		a.networkServer = newNetworkServer(a)
-		go func() {
-			if err := a.networkServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				println(fmt.Sprintf("network server error: %v", err))
-			}
-		}()
+		a.startPartageServer()
 	}
 }
 

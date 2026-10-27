@@ -10,8 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"exellence-materiaux/internal/factures"
@@ -411,6 +414,45 @@ type ServerInfo struct {
 	ServerURL string   `json:"serverUrl"`
 }
 
+var (
+	parefeuMu      sync.Mutex
+	parefeuVerifie bool
+)
+
+func ouvrirParefeuPort(port int) {
+	parefeuMu.Lock()
+	if parefeuVerifie {
+		parefeuMu.Unlock()
+		return
+	}
+	parefeuVerifie = true
+	parefeuMu.Unlock()
+
+	nomRegle := "Gestion de Stock - Partage Port 8765"
+	chkCmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+nomRegle)
+	chkCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := chkCmd.Run(); err == nil {
+		return
+	}
+
+	cmd := exec.Command("netsh", "advfirewall", "firewall", "add", "rule",
+		"name="+nomRegle,
+		"dir=in",
+		"action=allow",
+		"protocol=TCP",
+		fmt.Sprintf("localport=%d", port),
+		"profile=any",
+		"enable=yes",
+	)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd.Run()
+}
+
+func (a *App) OuvrirParefeuWindows() error {
+	ouvrirParefeuPort(8765)
+	return nil
+}
+
 func (a *App) startPartageServer() {
 	a.serverMu.Lock()
 	defer a.serverMu.Unlock()
@@ -432,16 +474,30 @@ func (a *App) startPartageServer() {
 		a.networkConfig.Token = defaultNetworkToken
 	}
 
-	a.networkServer = &http.Server{
+	go ouvrirParefeuPort(8765)
+
+	server := &http.Server{
 		Addr:              listenAddr,
 		Handler:           newNetworkHandler(a),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		println(fmt.Sprintf("serveur partage listen error: %v", err))
+		return
+	}
+
+	a.networkServer = server
 	go func() {
-		if err := a.networkServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			println(fmt.Sprintf("serveur partage error: %v", err))
+		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
+			println(fmt.Sprintf("serveur partage serve error: %v", err))
 		}
+		a.serverMu.Lock()
+		if a.networkServer == server {
+			a.networkServer = nil
+		}
+		a.serverMu.Unlock()
 	}()
 }
 
@@ -485,6 +541,7 @@ func (a *App) SetNetworkMode(mode, serverIP string) error {
 		if serverIP == "" {
 			return fmt.Errorf("adresse IP du PC 1 requise")
 		}
+
 		if !strings.HasPrefix(serverIP, "http://") && !strings.HasPrefix(serverIP, "https://") {
 			serverIP = "http://" + serverIP
 		}
@@ -495,7 +552,7 @@ func (a *App) SetNetworkMode(mode, serverIP string) error {
 		client := &http.Client{Timeout: 3 * time.Second}
 		resp, err := client.Get(serverIP + "/api/health")
 		if err != nil {
-			return fmt.Errorf("impossible de joindre le PC 1 à l'adresse %s. Vérifiez que le PC 1 est allumé et connecté en Admin", serverIP)
+			return fmt.Errorf("impossible de joindre le PC 1 à l'adresse %s. Vérifiez que le PC 1 est allumé, connecté en Admin et sur la même Box Wi-Fi", serverIP)
 		}
 		resp.Body.Close()
 
@@ -518,17 +575,31 @@ func (a *App) SetNetworkMode(mode, serverIP string) error {
 }
 
 func getLocalIPs() []string {
-	var ips []string
+	var lanIPs []string
+	var otherIPs []string
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return ips
+		return lanIPs
 	}
 	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				ips = append(ips, ipnet.IP.String())
+		if ipnet, ok := a.(*net.IPNet); ok {
+			ip := ipnet.IP.To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			ipStr := ip.String()
+			if strings.HasPrefix(ipStr, "169.254.") {
+				continue
+			}
+			if strings.HasPrefix(ipStr, "192.168.") || strings.HasPrefix(ipStr, "10.") || strings.HasPrefix(ipStr, "172.") {
+				lanIPs = append(lanIPs, ipStr)
+			} else {
+				otherIPs = append(otherIPs, ipStr)
 			}
 		}
 	}
-	return ips
+	if len(lanIPs) == 0 {
+		return otherIPs
+	}
+	return append(lanIPs, otherIPs...)
 }

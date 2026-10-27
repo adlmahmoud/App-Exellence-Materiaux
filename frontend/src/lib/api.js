@@ -50,7 +50,7 @@ function downloadFile(result) {
 }
 
 async function invoke(method, ...args) {
-  if (method === 'SetNetworkMode' || method === 'GetServerInfo' || method.includes('TPE')) {
+  if (method === 'SetNetworkMode' || method === 'GetServerInfo' || method === 'OuvrirParefeuWindows' || method.includes('TPE')) {
     if (method === 'SetNetworkMode') {
       networkConfigPromise = null;
     }
@@ -134,7 +134,8 @@ const methods = [
   'GetConfigTPE',
   'SauvegarderConfigTPE',
   'ListerPortsCOMTPE',
-  'SetSimulateurScenarioTPE'
+  'SetSimulateurScenarioTPE',
+  'OuvrirParefeuWindows'
 ];
 
 export const API = Object.fromEntries(methods.map(method => [method, (...args) => invoke(method, ...args)]));
@@ -177,5 +178,6 @@ export const {
   GetConfigTPE,
   SauvegarderConfigTPE,
   ListerPortsCOMTPE,
-  SetSimulateurScenarioTPE
+  SetSimulateurScenarioTPE,
+  OuvrirParefeuWindows
 } = API;

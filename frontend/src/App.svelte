@@ -28,6 +28,8 @@
   let ipSaisie = '';
   let erreurReseau = '';
   let reseauBusy = false;
+  let parefeuMessage = '';
+  let parefeuBusy = false;
 
   onMount(async () => {
     try {
@@ -144,6 +146,19 @@
       reseauBusy = false;
     }
   }
+
+  async function debloquerParefeu() {
+    parefeuMessage = '';
+    parefeuBusy = true;
+    try {
+      await API.OuvrirParefeuWindows();
+      parefeuMessage = 'Port 8765 autorisé dans le Pare-feu Windows avec succès !';
+    } catch (e) {
+      parefeuMessage = 'Notice: veuillez lancer le fichier AUTORISER_PAREFEU.bat sur le Bureau en tant qu\'administrateur.';
+    } finally {
+      parefeuBusy = false;
+    }
+  }
 </script>
 
 {#if authLoading}
@@ -251,15 +266,19 @@
 
     <div class="sidebar-footer">
       {#if serverInfo.running && serverInfo.ips.length > 0}
-        <div class="serveur-badge" title="Le PC 2 peut se connecter à cette adresse IP">
+        <div class="serveur-badge" on:click={() => modalReseau = true} style="cursor:pointer;" title="Cliquez pour afficher les paramètres réseau">
           <span class="dot-green"></span>
           <span>PC 1 : {serverInfo.ips[0]}:8765</span>
         </div>
       {:else if serverInfo.mode === 'client'}
-        <div class="serveur-badge client" title="Connecté au PC 1">
+        <div class="serveur-badge client" on:click={() => modalReseau = true} style="cursor:pointer;" title="Connecté au PC 1 - Cliquez pour gérer">
           <span class="dot-blue"></span>
           <span>Lié au PC 1</span>
         </div>
+      {:else}
+        <button type="button" class="btn-lien-reseau" on:click={() => modalReseau = true}>
+          📡 Lier ce poste au PC 1
+        </button>
       {/if}
       <span class="role-label">{currentRole === 'admin' ? 'Administrateur' : 'Utilisateur'}</span>
       <button class="btn-logout" on:click={fermerSession}>Déconnexion</button>
@@ -310,6 +329,17 @@
             <button type="button" class="btn-secondary-modal" disabled={reseauBusy} on:click={repasserEnModeLocal}>
               Repasser en mode local (PC 1)
             </button>
+          {/if}
+        </div>
+
+        <div class="parefeu-helper">
+          <div class="parefeu-title">🛡️ Résolution des blocages (Pare-feu Windows)</div>
+          <p class="parefeu-desc">Si le PC 2 ne parvient pas à se connecter, Windows sur le PC 1 bloque le port 8765. Cliquez sur ce bouton sur le PC 1 pour l'autoriser :</p>
+          <button type="button" class="btn-parefeu" disabled={parefeuBusy} on:click={debloquerParefeu}>
+            {parefeuBusy ? 'Déblocage en cours...' : 'Autoriser le port 8765 dans le Pare-feu Windows'}
+          </button>
+          {#if parefeuMessage}
+            <div class="parefeu-feedback">{parefeuMessage}</div>
           {/if}
         </div>
       </div>
@@ -658,5 +688,64 @@
     background: white;
     font-weight: 600;
     cursor: pointer;
+  }
+  .btn-lien-reseau {
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .btn-lien-reseau:hover {
+    background: #0369a1;
+  }
+  .parefeu-helper {
+    margin-top: 20px;
+    padding: 14px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+  .parefeu-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1e293b;
+    margin-bottom: 6px;
+  }
+  .parefeu-desc {
+    font-size: 0.85rem;
+    color: #475569;
+    margin: 0 0 10px;
+    line-height: 1.4;
+  }
+  .btn-parefeu {
+    background: #16a34a;
+    color: white;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn-parefeu:hover:not(:disabled) {
+    background: #15803d;
+  }
+  .btn-parefeu:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .parefeu-feedback {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #065f46;
+    font-weight: 600;
   }
 </style>
