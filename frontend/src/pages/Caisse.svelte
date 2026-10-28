@@ -24,11 +24,68 @@
 
   let suggestions = [];
   let timerSuggestions;
-  let scanBuffer = '';
-  let scanStartedAt = 0;
-  let scanLastKeyAt = 0;
-  let scanTarget;
-  let scanTargetValue = '';
+
+  let cacheProduits = new Map();
+
+  let azertyMap = {
+    '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5',
+    '-': '6', 'è': '7', '_': '8', 'ç': '9', 'à': '0'
+  };
+
+  function normaliserCodeBarres(str) {
+    if (!str) return '';
+    let res = '';
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      res += azertyMap[ch] !== undefined ? azertyMap[ch] : ch;
+    }
+    return res.trim();
+  }
+
+  function bipScan() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } catch (e) {}
+  }
+
+  async function chargerCacheProduits() {
+    try {
+      const res = await ListerProduits({ limit: 500, actif: true });
+      if (res && res.produits) {
+        cacheProduits.clear();
+        for (const p of res.produits) {
+          if (p.codeBarres) {
+            const cb = p.codeBarres.trim();
+            cacheProduits.set(cb.toLowerCase(), p);
+            cacheProduits.set(normaliserCodeBarres(cb).toLowerCase(), p);
+          }
+          if (p.reference) {
+            cacheProduits.set(p.reference.trim().toLowerCase(), p);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  let dernierInputTime = 0;
+  let inputBurstCount = 0;
+  let timerBurstInput;
+
+  let globalScanBuffer = '';
+  let globalLastKeyTime = 0;
+  let timerBurstGlobal;
 
   let clientNom = 'Client Comptoir';
   let modeReglement = 'especes';
@@ -39,6 +96,7 @@
   $: totalTVA = totalTTC - totalHT;
 
   onMount(() => {
+    chargerCacheProduits();
     focusScanInput();
     const handleWindowFocus = () => focusScanInput();
     document.addEventListener('keydown', capturerScanGlobal, true);
@@ -47,6 +105,8 @@
       document.removeEventListener('keydown', capturerScanGlobal, true);
       window.removeEventListener('focus', handleWindowFocus);
       clearTimeout(timerSuggestions);
+      clearTimeout(timerBurstInput);
+      clearTimeout(timerBurstGlobal);
     };
   });
 
@@ -55,7 +115,30 @@
   }
 
   function onInputScan() {
+    const maintenant = performance.now();
+    const intervalle = maintenant - dernierInputTime;
+    dernierInputTime = maintenant;
+
+    if (intervalle < 65) {
+      inputBurstCount++;
+    } else {
+      inputBurstCount = 1;
+    }
+
+    clearTimeout(timerBurstInput);
     clearTimeout(timerSuggestions);
+
+    if (inputBurstCount >= 3) {
+      timerBurstInput = setTimeout(() => {
+        const code = codeBarresSaisi.trim();
+        if (code.length >= 2) {
+          void traiterCodeBarres(code);
+        }
+        inputBurstCount = 0;
+      }, 70);
+      return;
+    }
+
     const q = codeBarresSaisi.trim();
     if (q.length < 2) {
       suggestions = [];
@@ -87,6 +170,7 @@
 
     e.preventDefault();
     if (e.repeat) return;
+    clearTimeout(timerBurstInput);
     const code = codeBarresSaisi.trim();
     if (!code) return;
     clearTimeout(timerSuggestions);
@@ -94,66 +178,107 @@
   }
 
   function capturerScanGlobal(e) {
-    if (document.activeElement === inputScanElement || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (['Shift', 'CapsLock', 'Control', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) return;
+    if (document.activeElement === inputScanElement) return;
 
-    const maintenant = e.timeStamp;
-    if ((e.key === 'Enter' || e.key === 'Tab') && scanBuffer.length >= 6 && maintenant - scanStartedAt <= 2000) {
-      e.preventDefault();
-      e.stopPropagation();
-      const code = scanBuffer;
-      if (scanTarget && typeof scanTarget.value === 'string' && scanTarget.value.endsWith(code)) {
-        scanTarget.value = scanTargetValue;
-        scanTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    const maintenant = performance.now();
+    const intervalle = maintenant - globalLastKeyTime;
+    globalLastKeyTime = maintenant;
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      clearTimeout(timerBurstGlobal);
+      if (globalScanBuffer.length >= 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        const code = globalScanBuffer;
+        globalScanBuffer = '';
+        void traiterCodeBarres(code);
       }
-      scanBuffer = '';
-      scanTarget = null;
-      void traiterCodeBarres(code);
       return;
     }
 
-    if (e.key.length !== 1) {
-      scanBuffer = '';
-      scanTarget = null;
-      return;
+    if (e.key.length !== 1) return;
+
+    if (intervalle > 200) {
+      globalScanBuffer = '';
     }
-    if (scanLastKeyAt && maintenant - scanLastKeyAt > 100) {
-      scanBuffer = '';
-      scanTarget = null;
+
+    globalScanBuffer += e.key;
+
+    clearTimeout(timerBurstGlobal);
+    if (globalScanBuffer.length >= 3) {
+      timerBurstGlobal = setTimeout(() => {
+        const code = globalScanBuffer;
+        globalScanBuffer = '';
+        void traiterCodeBarres(code);
+      }, 70);
     }
-    if (scanBuffer.length === 0) {
-      scanStartedAt = maintenant;
-      scanTarget = e.target;
-      scanTargetValue = typeof e.target?.value === 'string' ? e.target.value : '';
+  }
+
+  async function trouverProduitParCode(codeBrut) {
+    if (!codeBrut) return null;
+    const codeNet = codeBrut.trim();
+    const codeNorm = normaliserCodeBarres(codeNet);
+
+    const cleNet = codeNet.toLowerCase();
+    const cleNorm = codeNorm.toLowerCase();
+
+    if (cacheProduits.has(cleNet)) return cacheProduits.get(cleNet);
+    if (cacheProduits.has(cleNorm)) return cacheProduits.get(cleNorm);
+
+    try {
+      const prod = await GetProduitParCodeBarres(codeNorm);
+      if (prod && prod.id) {
+        cacheProduits.set(cleNorm, prod);
+        cacheProduits.set(cleNet, prod);
+        return prod;
+      }
+    } catch (e) {}
+
+    if (codeNorm !== codeNet) {
+      try {
+        const prod = await GetProduitParCodeBarres(codeNet);
+        if (prod && prod.id) {
+          cacheProduits.set(cleNorm, prod);
+          cacheProduits.set(cleNet, prod);
+          return prod;
+        }
+      } catch (e) {}
     }
-    scanBuffer += e.key;
-    scanLastKeyAt = maintenant;
+
+    try {
+      const res = await ListerProduits({ recherche: codeNorm, limit: 1 });
+      if (res && res.produits && res.produits.length > 0) {
+        const prod = res.produits[0];
+        cacheProduits.set(cleNorm, prod);
+        cacheProduits.set(cleNet, prod);
+        return prod;
+      }
+    } catch (e) {}
+
+    return null;
   }
 
   async function traiterCodeBarres(code) {
     if (!code) return;
     clearTimeout(timerSuggestions);
+    clearTimeout(timerBurstInput);
+    clearTimeout(timerBurstGlobal);
     messageErreur = '';
     messageSucces = '';
     suggestions = [];
     codeBarresSaisi = '';
 
-    try {
-      const prod = await GetProduitParCodeBarres(code);
+    const prod = await trouverProduitParCode(code);
+    if (prod) {
       ajouterAuPanier(prod);
-    } catch (err) {
-      try {
-        const res = await ListerProduits({ recherche: code, limit: 1 });
-        if (res && res.produits && res.produits.length > 0) {
-          ajouterAuPanier(res.produits[0]);
-        } else {
-          messageErreur = 'Aucun produit trouvé pour : ' + code;
-        }
-      } catch (e2) {
-        messageErreur = 'Aucun produit trouvé pour : ' + code;
-      }
-    } finally {
-      focusScanInput();
+      bipScan();
+    } else {
+      messageErreur = 'Aucun produit trouvé pour : ' + code;
     }
+
+    focusScanInput();
   }
 
   function ajouterAuPanier(p) {
