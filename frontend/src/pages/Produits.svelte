@@ -23,8 +23,8 @@
     reference: '',
     designation: '',
     description: '',
-    prixAchatHT: 0,
-    prixVenteHT: 0,
+    prixAchatHT: '',
+    prixVenteHT: '',
     tauxTva: 2000,
     stockInitial: 0,
     stockMinimum: 5,
@@ -37,8 +37,8 @@
     reference: '',
     designation: '',
     description: '',
-    prixAchatHT: 0,
-    prixVenteHT: 0,
+    prixAchatHT: '',
+    prixVenteHT: '',
     tauxTva: 2000,
     stockMinimum: 5,
     unite: 'piece',
@@ -100,8 +100,8 @@
       reference: '',
       designation: '',
       description: '',
-      prixAchatHT: 0,
-      prixVenteHT: 0,
+      prixAchatHT: '',
+      prixVenteHT: '',
       tauxTva: 2000,
       stockInitial: 0,
       stockMinimum: 5,
@@ -112,20 +112,46 @@
     modalNouveau = true;
   }
 
+  function convertirPrix(val) {
+    if (val === '' || val === null || val === undefined) return 0;
+    const str = String(val).replace(',', '.').trim();
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : Math.round(num * 100);
+  }
+
+  function empecherEntreeAccidentelle(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+  }
+
   async function soumettreNouveau() {
     messageErreur = '';
+    if (!formNouveau.codeBarres.trim()) {
+      messageErreur = 'Le code-barres est obligatoire.';
+      return;
+    }
+    if (!formNouveau.designation.trim()) {
+      messageErreur = 'La désignation est obligatoire.';
+      return;
+    }
+    const prixVenteCents = convertirPrix(formNouveau.prixVenteHT);
+    if (prixVenteCents <= 0) {
+      messageErreur = 'Le prix de vente HT doit être supérieur à 0.';
+      return;
+    }
     try {
       const payload = {
         codeBarres: formNouveau.codeBarres.trim(),
         reference: formNouveau.reference.trim(),
         designation: formNouveau.designation.trim(),
         description: formNouveau.description.trim(),
-        prixAchatHt: Math.round(Number(formNouveau.prixAchatHT) * 100),
-        prixVenteHt: Math.round(Number(formNouveau.prixVenteHT) * 100),
+        prixAchatHt: convertirPrix(formNouveau.prixAchatHT),
+        prixVenteHt: prixVenteCents,
         prixVenteTtc: 0,
         tauxTva: Number(formNouveau.tauxTva),
-        stockInitial: Math.round(Number(formNouveau.stockInitial)),
-        stockMinimum: Math.round(Number(formNouveau.stockMinimum)),
+        stockInitial: Math.round(Number(formNouveau.stockInitial) || 0),
+        stockMinimum: Math.round(Number(formNouveau.stockMinimum) || 0),
         unite: formNouveau.unite || 'piece'
       };
 
@@ -157,6 +183,11 @@
 
   async function soumettreEdition() {
     messageErreur = '';
+    const prixVenteCents = convertirPrix(formEdition.prixVenteHT);
+    if (prixVenteCents <= 0) {
+      messageErreur = 'Le prix de vente HT doit être supérieur à 0.';
+      return;
+    }
     try {
       const payload = {
         id: formEdition.id,
@@ -164,11 +195,11 @@
         reference: formEdition.reference.trim(),
         designation: formEdition.designation.trim(),
         description: formEdition.description.trim(),
-        prixAchatHt: Math.round(Number(formEdition.prixAchatHT) * 100),
-        prixVenteHt: Math.round(Number(formEdition.prixVenteHT) * 100),
+        prixAchatHt: convertirPrix(formEdition.prixAchatHT),
+        prixVenteHt: prixVenteCents,
         prixVenteTtc: 0,
         tauxTva: Number(formEdition.tauxTva),
-        stockMinimum: Math.round(Number(formEdition.stockMinimum)),
+        stockMinimum: Math.round(Number(formEdition.stockMinimum) || 0),
         unite: formEdition.unite,
         actif: formEdition.actif
       };
@@ -290,37 +321,40 @@
 </div>
 
 {#if modalNouveau}
-  <div class="overlay" on:click={() => modalNouveau = false}>
+  <div class="overlay">
     <div class="modal" on:click|stopPropagation>
       <div class="modal-header">
         <h2>Ajouter un Nouveau Produit</h2>
         <button class="close-btn" on:click={() => modalNouveau = false}>&times;</button>
       </div>
       <div class="modal-body">
+        {#if messageErreur}
+          <div class="alert error" style="margin-bottom: 12px; padding: 10px; background: #fee2e2; color: #dc2626; border-radius: 6px;">{messageErreur}</div>
+        {/if}
         <div class="form-row">
           <div class="form-group flex-2">
             <label>Code-barres (EAN / USB) * :</label>
-            <input type="text" bind:value={formNouveau.codeBarres} placeholder="Ex: 3760123456789" required />
+            <input type="text" bind:value={formNouveau.codeBarres} on:keydown={empecherEntreeAccidentelle} placeholder="Ex: 3760123456789" required />
           </div>
           <div class="form-group flex-1">
             <label>Référence :</label>
-            <input type="text" bind:value={formNouveau.reference} placeholder="Ex: MAT-001" />
+            <input type="text" bind:value={formNouveau.reference} on:keydown={empecherEntreeAccidentelle} placeholder="Ex: MAT-001" />
           </div>
         </div>
 
         <div class="form-group">
           <label>Désignation de l'article * :</label>
-          <input type="text" bind:value={formNouveau.designation} placeholder="Ex: Sac de ciment 35kg" required />
+          <input type="text" bind:value={formNouveau.designation} on:keydown={empecherEntreeAccidentelle} placeholder="Ex: Sac de ciment 35kg" required />
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label>Prix Achat HT (€) :</label>
-            <input type="number" step="0.01" bind:value={formNouveau.prixAchatHT} />
+            <input type="text" inputmode="decimal" bind:value={formNouveau.prixAchatHT} on:keydown={empecherEntreeAccidentelle} placeholder="0.00" />
           </div>
           <div class="form-group">
             <label>Prix Vente HT (€) * :</label>
-            <input type="number" step="0.01" bind:value={formNouveau.prixVenteHT} required />
+            <input type="text" inputmode="decimal" bind:value={formNouveau.prixVenteHT} on:keydown={empecherEntreeAccidentelle} placeholder="0.00" required />
           </div>
           <div class="form-group">
             <label>TVA :</label>
@@ -337,15 +371,15 @@
         <div class="form-row">
           <div class="form-group">
             <label>Stock Initial :</label>
-            <input type="number" bind:value={formNouveau.stockInitial} min="0" />
+            <input type="number" bind:value={formNouveau.stockInitial} on:keydown={empecherEntreeAccidentelle} min="0" />
           </div>
           <div class="form-group">
             <label>Seuil d'alerte stock bas :</label>
-            <input type="number" bind:value={formNouveau.stockMinimum} min="0" />
+            <input type="number" bind:value={formNouveau.stockMinimum} on:keydown={empecherEntreeAccidentelle} min="0" />
           </div>
           <div class="form-group">
             <label>Unité :</label>
-            <input type="text" bind:value={formNouveau.unite} placeholder="piece, sac, m2..." />
+            <input type="text" bind:value={formNouveau.unite} on:keydown={empecherEntreeAccidentelle} placeholder="piece, sac, m2..." />
           </div>
         </div>
       </div>
@@ -358,37 +392,40 @@
 {/if}
 
 {#if modalEdition}
-  <div class="overlay" on:click={() => modalEdition = false}>
+  <div class="overlay">
     <div class="modal" on:click|stopPropagation>
       <div class="modal-header">
         <h2>Modifier le Produit</h2>
         <button class="close-btn" on:click={() => modalEdition = false}>&times;</button>
       </div>
       <div class="modal-body">
+        {#if messageErreur}
+          <div class="alert error" style="margin-bottom: 12px; padding: 10px; background: #fee2e2; color: #dc2626; border-radius: 6px;">{messageErreur}</div>
+        {/if}
         <div class="form-row">
           <div class="form-group flex-2">
             <label>Code-barres * :</label>
-            <input type="text" bind:value={formEdition.codeBarres} required />
+            <input type="text" bind:value={formEdition.codeBarres} on:keydown={empecherEntreeAccidentelle} required />
           </div>
           <div class="form-group flex-1">
             <label>Référence :</label>
-            <input type="text" bind:value={formEdition.reference} />
+            <input type="text" bind:value={formEdition.reference} on:keydown={empecherEntreeAccidentelle} />
           </div>
         </div>
 
         <div class="form-group">
           <label>Désignation * :</label>
-          <input type="text" bind:value={formEdition.designation} required />
+          <input type="text" bind:value={formEdition.designation} on:keydown={empecherEntreeAccidentelle} required />
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label>Prix Achat HT (€) :</label>
-            <input type="number" step="0.01" bind:value={formEdition.prixAchatHT} />
+            <input type="text" inputmode="decimal" bind:value={formEdition.prixAchatHT} on:keydown={empecherEntreeAccidentelle} placeholder="0.00" />
           </div>
           <div class="form-group">
             <label>Prix Vente HT (€) * :</label>
-            <input type="number" step="0.01" bind:value={formEdition.prixVenteHT} required />
+            <input type="text" inputmode="decimal" bind:value={formEdition.prixVenteHT} on:keydown={empecherEntreeAccidentelle} placeholder="0.00" required />
           </div>
           <div class="form-group">
             <label>TVA :</label>
@@ -405,11 +442,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>Seuil d'alerte stock :</label>
-            <input type="number" bind:value={formEdition.stockMinimum} min="0" />
+            <input type="number" bind:value={formEdition.stockMinimum} on:keydown={empecherEntreeAccidentelle} min="0" />
           </div>
           <div class="form-group">
             <label>Unité :</label>
-            <input type="text" bind:value={formEdition.unite} />
+            <input type="text" bind:value={formEdition.unite} on:keydown={empecherEntreeAccidentelle} />
           </div>
         </div>
       </div>

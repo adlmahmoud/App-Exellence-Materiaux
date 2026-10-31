@@ -23,9 +23,9 @@ export namespace factures {
 	    totalTva: number;
 	    totalTtc: number;
 	    notes: string;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -92,9 +92,9 @@ export namespace factures {
 	    montantTva: number;
 	    montantTtc: number;
 	    ordre: number;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -184,9 +184,9 @@ export namespace factures {
 	    montantTva: number;
 	    montantTtc: number;
 	    ordre: number;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -268,9 +268,9 @@ export namespace factures {
 	    montantRegle: number;
 	    resteAPayer: number;
 	    notes: string;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -840,7 +840,7 @@ export namespace parametres {
 	    conditionsReglement: string;
 	    formatNumerotationFacture: string;
 	    formatNumerotationBon: string;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -1001,9 +1001,9 @@ export namespace produits {
 	    stockMinimum: number;
 	    unite: string;
 	    actif: boolean;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {
@@ -1146,9 +1146,9 @@ export namespace stock {
 	    prixUnitaireHt: number;
 	    referenceDocument: string;
 	    motif: string;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	    codeBarres: string;
 	    reference: string;
@@ -1204,9 +1204,9 @@ export namespace stock {
 	    prixUnitaireHt: number;
 	    referenceDocument: string;
 	    motif: string;
-	    
+	    // Go type: time
 	    createdAt: any;
-	    
+	    // Go type: time
 	    updatedAt: any;
 	
 	    static createFrom(source: any = {}) {

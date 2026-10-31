@@ -1,4 +1,4 @@
-
+﻿
 
 export function LogPrint(message) {
     window.runtime.LogPrint(message);

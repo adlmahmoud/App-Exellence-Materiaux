@@ -4,6 +4,7 @@
   const {
     ChangeAccessPasswords,
     GetParametres,
+    UpdateParametres,
     ImporterLogo,
     SauvegarderBase,
     GetConfigTPE,
@@ -36,6 +37,8 @@
   let chargement = true;
   let message = '';
   let messageErreur = '';
+  let capitalEuros = '';
+  let enregistrementEnCours = false;
   let currentAdminPassword = '';
   let newAdminPassword = '';
   let confirmAdminPassword = '';
@@ -63,6 +66,7 @@
       const res = await GetParametres();
       if (res) {
         params = { ...params, ...res };
+        capitalEuros = (res.capital / 100).toFixed(2);
       }
       const cfg = await GetConfigTPE();
       if (cfg && cfg.mode) {
@@ -75,6 +79,45 @@
       chargement = false;
     }
   });
+
+  async function enregistrerInformations() {
+    message = '';
+    messageErreur = '';
+    enregistrementEnCours = true;
+    try {
+      const valNettoyee = String(capitalEuros ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+      const capFloat = parseFloat(valNettoyee) || 0;
+      const capitalCentimes = Math.round(capFloat * 100);
+      const payload = {
+        denomination: params.denomination || '',
+        formeJuridique: params.formeJuridique || '',
+        capital: capitalCentimes,
+        adresse: params.adresse || '',
+        codePostal: params.codePostal || '',
+        ville: params.ville || '',
+        siren: params.siren || '',
+        siret: params.siret || '',
+        rcs: params.rcs || '',
+        numeroTva: params.numeroTva || '',
+        telephone: params.telephone || '',
+        email: params.email || '',
+        siteWeb: params.siteWeb || '',
+        logoPath: params.logoPath || '',
+        devise: params.devise || 'EUR',
+        tauxTvaDefaut: Number(params.tauxTvaDefaut) || 2000,
+        mentionsLegales: params.mentionsLegales || '',
+        conditionsReglement: params.conditionsReglement || ''
+      };
+      await UpdateParametres(payload);
+      params.capital = capitalCentimes;
+      capitalEuros = (capitalCentimes / 100).toFixed(2);
+      message = 'Les informations de l’entreprise ont été enregistrées avec succès.';
+    } catch (err) {
+      messageErreur = 'Erreur lors de l’enregistrement : ' + (err?.message || err);
+    } finally {
+      enregistrementEnCours = false;
+    }
+  }
 
   async function testerTPE() {
     testTPEEnCours = true;
@@ -225,7 +268,17 @@
           </div>
           <div class="form-group">
             <label>Capital (€) :</label>
-            <input type="number" value={(params.capital / 100).toFixed(2)} readonly />
+            <input type="text" inputmode="decimal" bind:value={capitalEuros} placeholder="ex: 1000.00" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Téléphone :</label>
+            <input type="text" bind:value={params.telephone} />
+          </div>
+          <div class="form-group">
+            <label>Email :</label>
+            <input type="text" bind:value={params.email} />
           </div>
         </div>
         <div class="form-group">
@@ -291,6 +344,11 @@
         <div class="form-group">
           <label>Conditions de règlement / mentions complémentaires :</label>
           <input type="text" bind:value={params.conditionsReglement} />
+        </div>
+        <div style="margin-top: 14px; margin-bottom: 20px;">
+          <button type="button" class="btn-save-tpe" style="width: 100%;" on:click={enregistrerInformations} disabled={enregistrementEnCours}>
+            {enregistrementEnCours ? 'Enregistrement en cours...' : '💾 Enregistrer les informations de l’entreprise'}
+          </button>
         </div>
         <div class="backup-box">
           <div>
